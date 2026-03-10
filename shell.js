@@ -421,5 +421,3 @@ async function boot() {
   TERM.writeln('Type \x1b[1mhelp\x1b[0m for a list of commands. Tab to autocomplete.');
   TERM.writeln('');
 }
-
-boot().catch(console.error);
