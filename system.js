@@ -4,7 +4,8 @@ window.PKG = (() => {
 
   const REGISTRY = {
     python: {
-      ver:'3.11.5', desc:'Python 3 interpreter',
+      ver:'3.11.5', desc:'Python 3 interpreter', size:'28.5 MB',
+      deps:[], suggests:['python3-pip','python3-venv'],
       install() {
         const interp = CMDS['python3'] = CMDS['python'] = async (args, st) => {
           if (args[0]==='-c'&&args[1]) return runPython(args[1]);
@@ -23,7 +24,8 @@ window.PKG = (() => {
       }
     },
     node: {
-      ver:'20.9.0', desc:'Node.js JavaScript runtime',
+      ver:'20.9.0', desc:'Node.js JavaScript runtime', size:'82.3 MB',
+      deps:[], suggests:['npm'],
       install() {
         CMDS['node']=CMDS['nodejs']=async(args)=>{
           if(args[0]==='-e'&&args[1]) return runJS(args[1]);
@@ -39,10 +41,26 @@ window.PKG = (() => {
               onExit:res });
           });
         };
+        CMDS['npm']=(args)=>{
+          const sub=args[0];
+          if(!sub)return 'npm <command>\nCommon: npm install, npm run, npm init, npm list';
+          if(sub==='install'||sub==='i'){
+            const pkg=args[1];
+            if(!pkg)return 'npm warn: no packages installed\nnpm info: To install a package, run:\n  npm install <package>';
+            TERM.writeln(`npm: fetching ${pkg}...`);
+            return `+ ${pkg}@1.0.0\nadded 1 package in 0.5s\n(simulated — no real npm in browser)`;
+          }
+          if(sub==='run'){const script=args[1];if(!script)return 'npm error: missing script name';return `> script\n> ${script}\n(npm run: simulated)`;}
+          if(sub==='init')return 'npm: wrote package.json\n(simulated)';
+          if(sub==='list'||sub==='ls')return 'htmlinux@1.0.0\n(no dependencies)';
+          if(sub==='-v'||sub==='--version')return '10.2.0';
+          return `npm: '${sub}' is not a recognized npm command`;
+        };
       }
     },
     htop: {
-      ver:'3.3.0', desc:'Interactive process viewer',
+      ver:'3.3.0', desc:'Interactive process viewer (TUI)', size:'232 KB',
+      deps:[], suggests:[],
       install() {
         CMDS['htop']=async()=>{
           showHtop();
@@ -51,7 +69,8 @@ window.PKG = (() => {
       }
     },
     neofetch: {
-      ver:'7.3.0', desc:'CLI system information tool',
+      ver:'7.3.0', desc:'CLI system information tool', size:'88 KB',
+      deps:[], suggests:[],
       install() {
         CMDS['neofetch']=()=>{
           const now=new Date(), up=Math.floor((now-BOOT_T)/1000);
@@ -61,41 +80,42 @@ window.PKG = (() => {
           const usedMB=mem?Math.round(mem.usedJSHeapSize/1048576):64;
           const totalMB=mem?Math.round(mem.jsHeapSizeLimit/1048576):8192;
           const art=[
-            '        .',
-            '       /|\\',
-            '      / | \\',
-            '     /  |  \\',
-            '    / . | . \\',
-            '   /    |    \\',
-            '  /_____|_____\\',
-            '        |',
-            '        |',
+            '\x1b[1;36m        .',
+            '\x1b[1;36m       /|\\',
+            '\x1b[1;36m      / | \\',
+            '\x1b[1;36m     /  |  \\',
+            '\x1b[1;36m    / . | . \\',
+            '\x1b[1;36m   /    |    \\',
+            '\x1b[1;36m  /_____|_____\\',
+            '\x1b[1;36m        |',
+            '\x1b[1;36m        |\x1b[0m',
           ];
           const info=[
             `\x1b[1m${ENV.v.USER}@${ENV.v.HOSTNAME}\x1b[0m`,
             '-'.repeat(18),
-            `OS:       HTMLinux 1.0.0 LTS`,
-            `Kernel:   6.1.0-htmlinux`,
-            `Shell:    bash 5.2.15`,
-            `Terminal: browser-tty`,
-            `CPU:      Browser vCPU x${navigator.hardwareConcurrency||4}`,
-            `Memory:   ${usedMB}MiB / ${totalMB}MiB`,
-            `Uptime:   ${upStr}`,
-            `Locale:   ${ENV.v.LANG}`,
-            `Storage:  ${Math.round(VFS.usedSpace()/1024)}K (localStorage)`,
+            `\x1b[1mOS:\x1b[0m       HTMLinux v2.0 LTS`,
+            `\x1b[1mKernel:\x1b[0m   6.1.0-htmlinux`,
+            `\x1b[1mShell:\x1b[0m    bash 5.2.15`,
+            `\x1b[1mTerminal:\x1b[0m browser-tty`,
+            `\x1b[1mCPU:\x1b[0m      Browser vCPU x${navigator.hardwareConcurrency||4}`,
+            `\x1b[1mMemory:\x1b[0m   ${usedMB}MiB / ${totalMB}MiB`,
+            `\x1b[1mUptime:\x1b[0m   ${upStr}`,
+            `\x1b[1mLocale:\x1b[0m   ${ENV.v.LANG}`,
+            `\x1b[1mStorage:\x1b[0m  ${Math.round(VFS.usedSpace()/1024)}K (localStorage)`,
             '',
-            '█ █ █ █ █ █ █ █',
+            '\x1b[40m   \x1b[41m   \x1b[42m   \x1b[43m   \x1b[44m   \x1b[45m   \x1b[46m   \x1b[47m   \x1b[0m',
           ];
           const rows=[];
           for(let i=0;i<Math.max(art.length,info.length);i++){
-            rows.push(`  ${(art[i]||'').padEnd(16)}  ${info[i]||''}`);
+            rows.push(`  ${(art[i]||'').padEnd(28)}  ${info[i]||''}`);
           }
           return rows.join('\n');
         };
       }
     },
     git: {
-      ver:'2.43.0', desc:'Distributed version control (clone fetches real GitHub files)',
+      ver:'2.43.0', desc:'Distributed version control system', size:'23.8 MB',
+      deps:[], suggests:['git-lfs'],
       install() {
         CMDS['git'] = async (args) => {
           const sub = args[0];
@@ -115,7 +135,6 @@ window.PKG = (() => {
             config:{ 'user.name': ENV.v.USER || 'user', 'user.email': (ENV.v.USER||'user')+'@htmlinux' }
           });
 
-          // ── init ──
           if (sub === 'init') {
             const r = newRepo();
             saveR(r);
@@ -125,7 +144,6 @@ window.PKG = (() => {
             return 'Initialized empty Git repository in ' + ENV.cwd + '/.git/';
           }
 
-          // ── clone ──
           if (sub === 'clone') {
             const url = args[1];
             if (!url) return 'usage: git clone <url> [dir]';
@@ -138,7 +156,6 @@ window.PKG = (() => {
 
             TERM.writeln("Cloning into '" + destDir + "'...");
 
-            // Get file list via jsDelivr API (no CORS issues), then GitHub API, then fallback
             let filesToFetch = [];
 
             try {
@@ -165,70 +182,20 @@ window.PKG = (() => {
               } catch(e) {}
             }
 
-            if (filesToFetch.length) {
-              TERM.writeln(`remote: Enumerating objects: ${filesToFetch.length}, done.`);
-            } else {
-              // Last resort: try common filenames
+            if (!filesToFetch.length) {
               filesToFetch = [
-                // Docs & meta
-                'README.md','readme.md','README.txt','README','readme.txt',
-                'LICENSE','LICENSE.md','LICENSE.txt','LICENCE','COPYING',
-                'CHANGELOG.md','CHANGELOG.txt','CHANGES.md','HISTORY.md',
-                'CONTRIBUTING.md','CODE_OF_CONDUCT.md','SECURITY.md',
-                'TODO.md','TODO.txt','NOTES.md','ROADMAP.md',
-                '.gitignore','.gitattributes','.editorconfig','.env.example',
-                // Web / JS / TS
-                'index.html','index.htm','index.js','index.ts','index.jsx','index.tsx',
-                'index.css','index.scss','index.sass','index.less',
-                'main.js','main.ts','main.jsx','main.tsx','main.css',
-                'app.js','app.ts','app.jsx','app.tsx','app.html','app.css','app.vue',
-                'App.js','App.ts','App.jsx','App.tsx','App.vue',
-                'script.js','scripts.js','bundle.js','dist/index.js',
-                'style.css','styles.css','stylesheet.css','global.css','reset.css',
-                // Config
-                'package.json','package-lock.json','yarn.lock','pnpm-lock.yaml',
-                'tsconfig.json','tsconfig.base.json','jsconfig.json',
-                'vite.config.js','vite.config.ts','webpack.config.js','webpack.config.ts',
-                'rollup.config.js','esbuild.config.js','babel.config.js','.babelrc',
-                'jest.config.js','jest.config.ts','vitest.config.js',
-                '.eslintrc','.eslintrc.js','.eslintrc.json','.eslintrc.yml',
-                'eslint.config.js','eslint.config.ts','.prettierrc','.prettierrc.json',
-                'tailwind.config.js','tailwind.config.ts','postcss.config.js',
-                'next.config.js','next.config.ts','nuxt.config.js','nuxt.config.ts',
-                'svelte.config.js','astro.config.js','remix.config.js',
-                'angular.json','.angular-cli.json','ember-cli-build.js',
-                // Python
-                'main.py','app.py','run.py','server.py','api.py','cli.py',
-                'setup.py','setup.cfg','pyproject.toml','requirements.txt',
-                'requirements-dev.txt','Pipfile','Pipfile.lock','poetry.lock',
-                '__init__.py','manage.py','wsgi.py','asgi.py','settings.py',
-                'models.py','views.py','urls.py','forms.py','serializers.py',
-                // Ruby / PHP / Go / Rust / Java / C
-                'Gemfile','Gemfile.lock','Rakefile','config.ru','.ruby-version',
-                'composer.json','composer.lock','artisan','wp-config.php',
-                'go.mod','go.sum','main.go','cmd/main.go',
-                'Cargo.toml','Cargo.lock','src/main.rs','src/lib.rs',
-                'pom.xml','build.gradle','settings.gradle','gradlew',
-                'Makefile','makefile','CMakeLists.txt','configure.ac',
-                'main.c','main.cpp','main.h','src/main.c','src/main.cpp',
-                // DevOps / Config
-                'Dockerfile','docker-compose.yml','docker-compose.yaml',
-                '.dockerignore','.travis.yml','Jenkinsfile',
-                '.github/workflows/main.yml','.github/workflows/ci.yml',
-                '.gitlab-ci.yml','azure-pipelines.yml','bitbucket-pipelines.yml',
-                'kubernetes.yml','k8s.yml','helm/values.yaml',
-                // Misc
-                'server.js','client.js','router.js','routes.js','routes/index.js',
-                'controllers/index.js','models/index.js','middleware/index.js',
-                'config.js','config.json','config.yaml','config.yml','config.toml',
-                'src/index.html','src/index.js','src/index.ts','src/App.jsx','src/App.tsx',
-                'src/main.js','src/main.ts','src/main.py','src/main.rs',
-                'src/styles.css','src/global.css','src/utils.js','src/helpers.js',
-                'lib/index.js','lib/main.js','bin/index.js','bin/cli.js',
-                'public/index.html','static/index.html','web/index.html',
-                'docs/index.md','docs/README.md','wiki/Home.md',
-                'test/index.js','tests/test_main.py','spec/index.js',
-                '.env','.env.local','.env.development','.env.production',
+                'README.md','readme.md','README.txt','LICENSE','LICENSE.md','.gitignore',
+                'index.html','index.js','index.ts','index.jsx','index.tsx',
+                'main.js','main.ts','main.jsx','main.tsx','main.css','main.py','main.go',
+                'app.js','app.ts','app.jsx','app.tsx','app.html','app.css','app.py',
+                'package.json','package-lock.json','tsconfig.json','jsconfig.json',
+                'vite.config.js','vite.config.ts','webpack.config.js','babel.config.js',
+                'tailwind.config.js','next.config.js','nuxt.config.js',
+                'setup.py','pyproject.toml','requirements.txt','Pipfile','Cargo.toml',
+                'go.mod','Makefile','Dockerfile','docker-compose.yml',
+                'src/index.js','src/index.ts','src/App.jsx','src/App.tsx','src/main.js',
+                'src/main.ts','src/main.py','src/main.rs','src/styles.css',
+                'CHANGELOG.md','CONTRIBUTING.md','.env.example',
               ];
             }
 
@@ -238,6 +205,7 @@ window.PKG = (() => {
 
             let fetched = 0, failed = 0;
             const rawBase = `https://raw.githubusercontent.com/${owner}/${repo}/HEAD/`;
+            TERM.writeln(`remote: Enumerating objects: ${filesToFetch.length}, done.`);
             for (const fpath of filesToFetch) {
               try {
                 const resp = await fetch(rawBase + fpath);
@@ -269,7 +237,6 @@ window.PKG = (() => {
             return `\nReceiving objects: 100% (${fetched}/${filesToFetch.length})\nResolving deltas: done.\n\ncd ${destDir}`;
           }
 
-          // ── all other commands need an existing repo ──
           const r = loadR();
           if (!r && !['init','clone'].includes(sub))
             return 'fatal: not a git repository (or any of the parent directories): .git';
@@ -341,15 +308,14 @@ window.PKG = (() => {
               r.stash.push([...r.staged]); r.staged=[]; saveR(r);
               return 'Saved working directory and index state WIP on ' + r.branch;
             case 'remote':
-              if (args[1]==='add') { if(!args[2]||!args[3]) return 'usage: git remote add <name> <url>'; r.remotes[args[2]]={url:args[3]}; saveR(r); return ''; }
+              if (args[1]==='add') { if(!args[2]||!args[3]) return 'usage: git remote add <n> <url>'; r.remotes[args[2]]={url:args[3]}; saveR(r); return ''; }
               if (args[1]==='-v') return Object.entries(r.remotes).map(([n,{url}])=>n+'\t'+url+' (fetch)\n'+n+'\t'+url+' (push)').join('\n') || '(no remotes)';
               return Object.keys(r.remotes).join('\n') || '(no remotes)';
             case 'config':
               if (args[1]==='--list') return Object.entries(r.config).map(([k,v])=>k+'='+v).join('\n');
               if (args[2]) { r.config[args[1]]=args[2]; saveR(r); return ''; }
               return r.config[args[1]] || '';
-            case 'push': return `To ${r.remotes?.origin?.url||'(no remote)'}
-   (push simulated — no git server)`;
+            case 'push': return `To ${r.remotes?.origin?.url||'(no remote)'}\n   (push simulated — no git server)`;
             case 'pull': return 'Already up to date.';
             case 'merge': return args[1] ? `Merge made by the 'recursive' strategy.` : 'usage: git merge <branch>';
             case 'tag':
@@ -360,32 +326,46 @@ window.PKG = (() => {
               if (!c) return 'fatal: no commits yet';
               return `\x1b[33mcommit ${c.hash}\x1b[0m\nAuthor: ${c.author||r.config['user.name']}\nDate:   ${new Date(c.date).toLocaleString()}\n\n    ${c.msg}`;
             }
+            case 'shortlog': return r.commits.map(c=>`${c.author||r.config['user.name']} (${r.commits.filter(x=>x.author===c.author).length})\n      ${c.msg}`).join('\n');
+            case 'blame': {
+              const f=args[1];if(!f)return 'usage: git blame <file>';
+              const content=VFS.readFile(f,ENV.cwd)||'';
+              return content.split('\n').map((l,i)=>`${(r.commits.at(-1)?.hash||'0000000').slice(0,8)} (${r.config['user.name']} ${new Date().toLocaleDateString()} ${i+1}) ${l}`).join('\n');
+            }
+            case 'grep': {
+              const pat=args[1];if(!pat)return 'usage: git grep <pattern>';
+              const re=new RegExp(pat,'g');const results=[];
+              const entries=VFS.readdir(ENV.cwd)||[];
+              for(const e of entries){if(e.t!=='f')continue;const c=VFS.readFile(e.path)||'';const m=c.match(re);if(m)results.push(`${e.name}:${m.join(', ')}`);}
+              return results.join('\n')||'(no matches)';
+            }
             default: return `git: '${sub}' is not a git command. See 'git help'.`;
           }
         };
       }
     },
     curl: {
-      ver:'8.4.0', desc:'URL data transfer tool',
+      ver:'8.4.0', desc:'URL data transfer tool', size:'1.2 MB',
+      deps:[], suggests:[],
       install() {
         CMDS['curl']=async(args)=>{
-          let url='',heads=false,method='GET',silent=false,out=null,data=null,head=false;
+          let url='',heads=false,method='GET',silent=false,out=null,data=null,headers={};
           for(let i=0;i<args.length;i++){
             if(args[i]==='-I'||args[i]==='--head')heads=true;
             else if(args[i]==='-s'||args[i]==='--silent')silent=true;
             else if((args[i]==='-o'||args[i]==='--output')&&args[i+1])out=args[++i];
             else if((args[i]==='-X'||args[i]==='--request')&&args[i+1])method=args[++i];
             else if((args[i]==='-d'||args[i]==='--data')&&args[i+1])data=args[++i];
+            else if((args[i]==='-H'||args[i]==='--header')&&args[i+1]){const h=args[++i];const[k,v]=h.split(':');headers[k.trim()]=v?.trim();}
             else if(!args[i].startsWith('-'))url=args[i];
           }
           if(!url)return 'curl: no URL specified';
           try {
-            const opts={method};
-            if(data){opts.body=data;opts.headers={'Content-Type':'application/x-www-form-urlencoded'};}
-            if(!silent)TERM.writeln(`  % Total    % Received % Xferd`);
+            const opts={method,headers};
+            if(data){opts.body=data;opts.headers['Content-Type']=opts.headers['Content-Type']||'application/x-www-form-urlencoded';}
             const resp=await fetch(url,opts);
             if(heads){
-              let h=`HTTP/${resp.headers.get('content-type')?'1.1':'2'} ${resp.status} ${resp.statusText}\r\n`;
+              let h=`HTTP/2 ${resp.status} ${resp.statusText}\r\n`;
               resp.headers.forEach((v,k)=>{h+=`${k}: ${v}\r\n`;});
               return h;
             }
@@ -397,7 +377,8 @@ window.PKG = (() => {
       }
     },
     wget: {
-      ver:'1.21.4', desc:'Non-interactive network downloader',
+      ver:'1.21.4', desc:'Non-interactive network downloader', size:'760 KB',
+      deps:[], suggests:[],
       install() {
         CMDS['wget']=async(args)=>{
           const url=args.find(a=>!a.startsWith('-'));
@@ -419,18 +400,19 @@ window.PKG = (() => {
       }
     },
     vim: {
-      ver:'9.1', desc:'Vi IMproved text editor',
-      install() { CMDS['vim']=CMDS['vi']=CMDS['nano']||CMDS['nano']||(async(args)=>new Promise(r=>Nano.open(args[0],()=>r('')))); }
+      ver:'9.1', desc:'Vi IMproved text editor', size:'3.1 MB',
+      deps:[], suggests:[],
+      install() { CMDS['vim']=CMDS['vi']=(async(args)=>new Promise(r=>Nano.open(args[0],()=>r('')))); }
     },
     lua: {
-      ver:'5.4.6', desc:'Lightweight scripting language',
+      ver:'5.4.6', desc:'Lightweight scripting language', size:'312 KB',
+      deps:[], suggests:[],
       install() {
         CMDS['lua']=(args)=>{
           const src=args[0]?VFS.readFile(args[0],ENV.cwd):null;
           if(args[0]&&src===null)return `lua: cannot open '${args[0]}': No such file`;
           const code=src||(args[0]==='-e'?args[1]:'');
-          if(!code)return 'Lua 5.4.6 -- HTMLinux (no REPL in this build, use -e or filename)';
-          // Very basic Lua subset via JS
+          if(!code)return 'Lua 5.4.6 -- HTMLinux (use -e or filename)';
           const out=[];
           try {
             const js=code
@@ -443,14 +425,273 @@ window.PKG = (() => {
               .replace(/\bor\b/g,'||')
               .replace(/--[^\n]*/g,'')
               .replace(/\bnil\b/g,'null')
-              .replace(/\bfalse\b/g,'false')
-              .replace(/\btrue\b/g,'true')
               .replace(/function\s+(\w+)\s*\(/g,'function $1(')
               .replace(/\blocal\s+/g,'let ');
             const fn=new Function('_out', js+'; return _out;');
-            const result=fn(out);
-            return result.join('\n');
+            return fn(out).join('\n');
           } catch(e){return `lua: ${e.message}`;}
+        };
+      }
+    },
+    jq: {
+      ver:'1.7.1', desc:'Command-line JSON processor', size:'1.1 MB',
+      deps:[], suggests:[],
+      install() {
+        // jq is already in CMDS as a builtin, this upgrades it with more features
+        const orig = CMDS['jq'];
+        CMDS['jq']=(args)=>{
+          let filter='.', raw=false, compact=false, slurp=false;
+          const ps=[];
+          for(const a of args){
+            if(a==='-r'||a==='--raw-output')raw=true;
+            else if(a==='-c'||a==='--compact-output')compact=false;
+            else if(a==='-s'||a==='--slurp')slurp=true;
+            else if(!a.startsWith('-')&&!VFS.exists(a,ENV.cwd)&&a!=='.')filter=a;
+            else if(!a.startsWith('-'))ps.push(a);
+          }
+          if(!ps.length)return 'jq: no input file';
+          return ps.map(p=>{
+            const c=VFS.readFile(p,ENV.cwd);if(!c)return `jq: ${p}: No such file`;
+            try{
+              const data=JSON.parse(c);
+              const apply=(d,f)=>{
+                if(f==='.')return d;
+                if(f==='keys')return Array.isArray(d)?[...Array(d.length).keys()]:Object.keys(d);
+                if(f==='values')return Array.isArray(d)?d:Object.values(d);
+                if(f==='length')return Array.isArray(d)||typeof d==='string'?d.length:Object.keys(d).length;
+                if(f==='type')return Array.isArray(d)?'array':typeof d;
+                if(f.startsWith('.[]'))return Array.isArray(d)?d:Object.values(d);
+                if(f.startsWith('.'))return f.slice(1).split('.').reduce((o,k)=>o?.[k],d);
+                return d;
+              };
+              const result=apply(data,filter);
+              if(raw&&typeof result==='string')return result;
+              return JSON.stringify(result,null,compact?0:2);
+            }catch(e){return `jq: parse error: ${e.message}`;}
+          }).join('\n');
+        };
+      }
+    },
+    ripgrep: {
+      ver:'14.1.0', desc:'Fast recursive search tool (rg)', size:'5.2 MB',
+      deps:[], suggests:[],
+      install() {
+        CMDS['rg']=CMDS['ripgrep']=(args)=>{
+          let pattern='', ignoreCase=false, noFilename=false, lineNum=false, count=false;
+          const paths=[];
+          for(let i=0;i<args.length;i++){
+            if(args[i]==='-i'||args[i]==='--ignore-case')ignoreCase=true;
+            else if(args[i]==='--no-filename')noFilename=true;
+            else if(args[i]==='-n'||args[i]==='--line-number')lineNum=true;
+            else if(args[i]==='-c'||args[i]==='--count')count=true;
+            else if(!pattern&&!args[i].startsWith('-'))pattern=args[i];
+            else if(!args[i].startsWith('-'))paths.push(args[i]);
+          }
+          if(!pattern)return 'rg: missing pattern';
+          const targets=paths.length?paths:['.'];
+          const flags=ignoreCase?'gi':'g';
+          let re;try{re=new RegExp(pattern,flags);}catch{return `rg: invalid regex: ${pattern}`;}
+          const results=[];
+          const searchFile=(p,prefix='')=>{
+            const content=VFS.readFile(p,ENV.cwd);if(!content)return;
+            const lines=content.split('\n');
+            if(count){const n=lines.filter(l=>{const m=re.test(l);re.lastIndex=0;return m;}).length;if(n)results.push(`\x1b[35m${prefix||p}\x1b[0m:${n}`);return;}
+            lines.forEach((line,idx)=>{
+              const match=re.test(line);re.lastIndex=0;
+              if(match){
+                let out=noFilename?'':(`\x1b[35m${prefix||p}\x1b[0m:`);
+                if(lineNum)out+=`\x1b[2m${idx+1}\x1b[0m:`;
+                out+=line.replace(re,m=>`\x1b[1;31m${m}\x1b[0m`);re.lastIndex=0;
+                results.push(out);
+              }
+            });
+          };
+          for(const t of targets){
+            const node=VFS.stat(t,ENV.cwd);
+            if(node?.t==='d'){const e=VFS.readdir(t,ENV.cwd)||[];e.filter(x=>x.t==='f').forEach(x=>searchFile(x.path,x.path));}
+            else searchFile(t,t);
+          }
+          return results.join('\n');
+        };
+      }
+    },
+    fzf: {
+      ver:'0.46.1', desc:'Command-line fuzzy finder', size:'3.4 MB',
+      deps:[], suggests:[],
+      install() {
+        CMDS['fzf']=async(args)=>{
+          // Show interactive-style fuzzy picker using all files in CWD
+          const entries=VFS.readdir(ENV.cwd)||[];
+          const names=entries.map(e=>e.name);
+          if(!names.length)return '(no files to select)';
+          const query=args[0]||'';
+          const matches=query?names.filter(n=>n.toLowerCase().includes(query.toLowerCase())):names;
+          if(!matches.length)return '';
+          TERM.writeln(`\x1b[2m> fuzzy search (${matches.length} matches)\x1b[0m`);
+          matches.slice(0,20).forEach((m,i)=>TERM.writeln(`  ${i===0?'\x1b[1;32m>':' '} ${m}\x1b[0m`));
+          return matches[0]||'';
+        };
+      }
+    },
+    httpie: {
+      ver:'3.2.2', desc:'User-friendly HTTP client (http/https cmds)', size:'1.8 MB',
+      deps:[], suggests:[],
+      install() {
+        const makeReq=async(method,args)=>{
+          const url=args.find(a=>a.startsWith('http')||a.includes('://'));
+          if(!url)return `http: missing URL`;
+          const headers={};const body={};
+          for(const a of args.filter(a=>a!==url&&!a.startsWith('-'))){
+            if(a.includes(':'))headers[a.split(':')[0]]=a.split(':').slice(1).join(':').trim();
+            else if(a.includes('='))body[a.split('=')[0]]=a.split('=').slice(1).join('=');
+          }
+          try{
+            const opts={method,headers};
+            if(Object.keys(body).length)opts.body=JSON.stringify(body);
+            const resp=await fetch(url,opts);
+            const text=await resp.text();
+            let parsed;try{parsed=JSON.parse(text);}catch{parsed=null;}
+            const statusColor=resp.ok?'\x1b[32m':'\x1b[31m';
+            return `${statusColor}HTTP/2 ${resp.status} ${resp.statusText}\x1b[0m\n${parsed?JSON.stringify(parsed,null,2):text}`;
+          }catch(e){return `http: connection error: ${e.message}`;}
+        };
+        CMDS['http'] =async(args)=>makeReq('GET',args);
+        CMDS['https']=async(args)=>makeReq('GET',args);
+        CMDS['httpie']=async(args)=>{const m=args[0]?.toUpperCase()||'GET';return makeReq(m,args.slice(1));};
+      }
+    },
+    tree: {
+      ver:'2.1.1', desc:'Display directory tree structure', size:'96 KB',
+      deps:[], suggests:[],
+      install() {
+        CMDS['tree']=(args)=>{
+          const target=args.find(a=>!a.startsWith('-'))||'.';
+          const maxDepth=parseInt(args[args.indexOf('-L')+1])||5;
+          const showHidden=args.includes('-a');
+          const lines=[];let dirs=0,files=0;
+          const walk=(p,depth,prefix)=>{
+            if(depth>maxDepth)return;
+            const entries=(VFS.readdir(p,ENV.cwd)||[]).filter(e=>showHidden||!e.name.startsWith('.'));
+            entries.sort((a,b)=>{if(a.t!==b.t)return a.t==='d'?-1:1;return a.name.localeCompare(b.name);});
+            entries.forEach((e,i)=>{
+              const isLast=i===entries.length-1;
+              const connector=isLast?'└── ':'├── ';
+              const childPrefix=prefix+(isLast?'    ':'│   ');
+              const color=e.t==='d'?'\x1b[1;34m':e.t==='l'?'\x1b[1;36m':'';
+              lines.push(`${prefix}${connector}${color}${e.name}\x1b[0m${e.t==='l'?` -> ${e.target||'?'}`:''}${e.t==='d'?'/':''}`);
+              if(e.t==='d'){dirs++;walk(e.path,depth+1,childPrefix);}else files++;
+            });
+          };
+          const rootName=VFS.norm(target,ENV.cwd).split('/').pop()||target;
+          lines.unshift(`\x1b[1;34m${rootName}\x1b[0m`);
+          walk(VFS.norm(target,ENV.cwd),1,'');
+          lines.push(`\n${dirs} director${dirs===1?'y':'ies'}, ${files} file${files===1?'':'s'}`);
+          return lines.join('\n');
+        };
+      }
+    },
+    fortune: {
+      ver:'1.99.1', desc:'Print a random fortune cookie', size:'8 KB',
+      deps:[], suggests:[],
+      install() {
+        const fortunes=[
+          'The art of programming is the art of organizing complexity. — Dijkstra',
+          'Any fool can write code that a computer can understand. Good programmers write code that humans can understand. — Fowler',
+          'Talk is cheap. Show me the code. — Torvalds',
+          'The most dangerous phrase in the language is "We have always done it this way." — Grace Hopper',
+          'sudo make me a sandwich. — xkcd',
+          'There are 10 types of people: those who understand binary, and those who do not.',
+          'The best code is no code at all. — Jeff Atwood',
+          'It works on my machine. — Every Developer',
+          'First, solve the problem. Then, write the code. — John Johnson',
+          "Code is like humor. When you have to explain it, it's bad. \u2014 Cory House",
+          'Programs must be written for people to read, and only incidentally for machines to execute. — Abelson',
+          'The only way to learn a new programming language is by writing programs in it. — Kernighan',
+          'Premature optimization is the root of all evil. — Knuth',
+          'Make it work, make it right, make it fast. — Kent Beck',
+          "Sometimes it pays to stay in bed on Monday rather than spending the rest of the week debugging Monday\u2019s code. \u2014 Christopher Thompson",
+        ];
+        CMDS['fortune']=()=>fortunes[Math.floor(Math.random()*fortunes.length)];
+      }
+    },
+    cowsay: {
+      ver:'3.04', desc:'Generate ASCII art speech bubbles', size:'4 KB',
+      deps:[], suggests:['fortune'],
+      install() {
+        // cowsay already exists as a builtin, this upgrades it with more cows
+        const cows={
+          cow:  '        \\   ^__^\n         \\  (oo)\\_______\n            (__)\\ )\\/\\\n                ||----w |\n                ||     ||',
+          tux:  '         \\\n          \\\n           .--.\n          |o_o |\n          |:_/ |\n         //   \\ \\\n        (|     | )\n        /\'\\_ _/`\\\n        \\___)=(___/',
+          dragon:'         \\\n          \\\n            /\\_/\\    /\\_/\\\n           / o o \\  / o o \\\n          (  =^=  )(  =^=  )\n           \\     /  \\     /\n            \\___/    \\___/',
+        };
+        CMDS['cowsay']=(args)=>{
+          const ci=args.indexOf('-f');const cow=ci!==-1?args[ci+1]:'cow';
+          const filtered=args.filter((a,i)=>a!=='-f'&&i!==ci+1);
+          const m=filtered.join(' ')||'Moo!';const b=m.length+2;
+          const body=cows[cow]||cows.cow;
+          return ` ${'_'.repeat(b)}\n< ${m} >\n ${'‾'.repeat(b)}\n${body}`;
+        };
+        CMDS['cowthink']=(args)=>{
+          const m=args.join(' ')||'Hmm...';const b=m.length+2;
+          return ` ${'_'.repeat(b)}\n( ${m} )\n ${'‾'.repeat(b)}\n${cows.cow.replace(/\\/g,'o')}`;
+        };
+      }
+    },
+    ffmpeg: {
+      ver:'6.1', desc:'Multimedia framework (stub)', size:'45.2 MB',
+      deps:[], suggests:[],
+      install() {
+        CMDS['ffmpeg']=(args)=>{
+          if(args.includes('-version'))return 'ffmpeg version 6.1 Copyright (c) 2000-2023 the FFmpeg developers (HTMLinux stub)';
+          const i=args.indexOf('-i');const o=args[args.length-1];
+          if(i!==-1&&o){return `ffmpeg: ${args[i+1]} -> ${o}\n(stub: media conversion is not available in browser)`;}
+          return 'ffmpeg: (stub) usage: ffmpeg -i input output\nMedia processing is not available in browser context.';
+        };
+      }
+    },
+    imagemagick: {
+      ver:'7.1.1', desc:'Image manipulation tools (convert, identify)', size:'38.4 MB',
+      deps:[], suggests:[],
+      install() {
+        CMDS['convert']=(args)=>`convert: (stub) ${args.join(' ')}\nImage conversion is not available in browser context.`;
+        CMDS['identify']=(args)=>{
+          if(!args[0])return 'identify: missing file';
+          return `${args[0]} JPEG 800x600 800x600+0+0 8-bit sRGB 124KB 0.000u 0:00.000\n(stub: image metadata is not available)`;
+        };
+        CMDS['mogrify']=(args)=>`mogrify: (stub) image transformation not available in browser.`;
+      }
+    },
+    sqlite3: {
+      ver:'3.43.2', desc:'Lightweight SQL database engine', size:'1.8 MB',
+      deps:[], suggests:[],
+      install() {
+        // In-memory SQLite-like engine using localStorage
+        const dbs={};
+        CMDS['sqlite3']=(args)=>{
+          const dbFile=args[0]||':memory:';
+          if(!dbs[dbFile])dbs[dbFile]={tables:{}};
+          const db=dbs[dbFile];
+          const sql=args.slice(1).join(' ').trim();
+          if(!sql)return `SQLite version 3.43.2\nEnter ".help" for usage hints.\nConnected to ${dbFile}\n\n(pass SQL as argument: sqlite3 db.sqlite "SELECT * FROM table")`;
+          try{
+            const q=sql.toUpperCase().trim();
+            if(q.startsWith('CREATE TABLE')){
+              const m=sql.match(/CREATE TABLE\s+(\w+)\s*\((.*?)\)/i);
+              if(m){db.tables[m[1]]={cols:m[2].split(',').map(c=>c.trim().split(/\s+/)[0]),rows:[]};return '';}
+            }
+            if(q.startsWith('INSERT INTO')){
+              const m=sql.match(/INSERT INTO\s+(\w+)\s*(?:\((.*?)\))?\s*VALUES\s*\((.*?)\)/i);
+              if(m){const t=db.tables[m[1]];if(!t)return `Error: no such table: ${m[1]}`;t.rows.push(m[3].split(',').map(v=>v.trim().replace(/^'|'$/g,'')));return '';}
+            }
+            if(q.startsWith('SELECT')){
+              const m=sql.match(/SELECT\s+(.*?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(.*))?/i);
+              if(m){const t=db.tables[m[2]];if(!t)return `Error: no such table: ${m[2]}`;return t.rows.map(r=>r.join('|')).join('\n')||'';}
+            }
+            if(q.startsWith('DROP TABLE')){const tname=sql.split(/\s+/)[2];delete db.tables[tname];return '';}
+            if(sql.startsWith('.tables'))return Object.keys(db.tables).join('\n');
+            if(sql.startsWith('.schema')){return Object.entries(db.tables).map(([n,t])=>`CREATE TABLE ${n} (${t.cols.join(', ')});`).join('\n');}
+            return `Error: near "${sql.slice(0,20)}": syntax error`;
+          }catch(e){return `Error: ${e.message}`;}
         };
       }
     },
@@ -462,32 +703,52 @@ window.PKG = (() => {
       for(const n of Object.keys(inst)) if(REGISTRY[n]) REGISTRY[n].install();
     },
     async update(shell) {
-      shell.writeln(`Hit:1 https://packages.htmlinux.local stable InRelease`);
-      await delay(200);
-      shell.writeln(`Hit:2 https://packages.htmlinux.local stable/main amd64 Packages`);
+      shell.writeln(`\x1b[1mGet:1\x1b[0m https://packages.htmlinux.local stable InRelease`);
+      await delay(150);
+      shell.writeln(`\x1b[1mGet:2\x1b[0m https://packages.htmlinux.local stable/main amd64 Packages [${Object.keys(REGISTRY).length} packages]`);
       await delay(100);
-      shell.writeln(`Reading package lists... Done`);
-      shell.writeln(`Building dependency tree... Done`);
-      shell.writeln(`All packages are up to date.`);
+      shell.writeln(`Reading package lists... \x1b[1mDone\x1b[0m`);
+      shell.writeln(`Building dependency tree... \x1b[1mDone\x1b[0m`);
+      shell.writeln(`Reading state information... \x1b[1mDone\x1b[0m`);
+      const upgradable=Object.keys(inst).filter(n=>REGISTRY[n]);
+      if(upgradable.length)shell.writeln(`${upgradable.length} package(s) can be upgraded.`);
+      else shell.writeln(`All packages are up to date.`);
       return '';
     },
-    async install(name, shell) {
-      const pkg=REGISTRY[name];
-      if(!pkg)return `E: Unable to locate package ${name}\nDid you run apt update?`;
-      if(inst[name])return `${name} is already the newest version (${pkg.ver}).`;
-      shell.writeln(`Reading package lists... Done`);
-      shell.writeln(`The following NEW packages will be installed:\n  ${name}`);
-      shell.writeln(`After this operation, 0 B of additional disk space will be used.`);
-      await delay(150);
-      shell.writeln(`Get:1 https://packages.htmlinux.local stable/${name} ${pkg.ver} [bundled]`);
-      await delay(200);
-      shell.writeln(`Selecting previously unselected package ${name}.`);
-      shell.writeln(`Unpacking ${name} (${pkg.ver}) ...`);
+    async install(names, shell) {
+      // Support multiple package installs
+      const pkgNames=Array.isArray(names)?names:[names];
+      const toInstall=[];
+      for(const name of pkgNames){
+        const pkg=REGISTRY[name];
+        if(!pkg){shell.writeln(`\x1b[1;31mE:\x1b[0m Unable to locate package ${name}`);continue;}
+        if(inst[name]){shell.writeln(`${name} is already the newest version (${pkg.ver}).`);continue;}
+        toInstall.push({name,pkg});
+      }
+      if(!toInstall.length)return '';
+      shell.writeln(`Reading package lists... \x1b[1mDone\x1b[0m`);
+      shell.writeln(`Building dependency tree... \x1b[1mDone\x1b[0m`);
+      shell.writeln(`The following NEW packages will be installed:\n  ${toInstall.map(p=>p.name).join(' ')}`);
+      const totalSize=toInstall.reduce((s,p)=>s+parseFloat(p.pkg.size||'0'),0);
+      shell.writeln(`After this operation, ${totalSize.toFixed(1)} MB of additional disk space will be used.`);
       await delay(100);
-      shell.writeln(`Setting up ${name} (${pkg.ver}) ...`);
-      pkg.install();
-      inst[name]={ver:pkg.ver,inst:Date.now()};
-      localStorage.setItem(KEY,JSON.stringify(inst));
+      for(const {name,pkg} of toInstall){
+        shell.writeln(`\x1b[1mGet:1\x1b[0m https://packages.htmlinux.local stable/${name} ${pkg.ver} [${pkg.size||'?'}]`);
+        await delay(200);
+        shell.writeln(`Selecting previously unselected package \x1b[1m${name}\x1b[0m.`);
+        shell.writeln(`(Reading database ... 42420 files and directories currently installed.)`);
+        shell.writeln(`Preparing to unpack .../archives/${name}_${pkg.ver}_all.deb ...`);
+        await delay(150);
+        shell.writeln(`Unpacking ${name} (${pkg.ver}) ...`);
+        await delay(100);
+        shell.writeln(`Setting up ${name} (${pkg.ver}) ...`);
+        pkg.install();
+        inst[name]={ver:pkg.ver,inst:Date.now()};
+        localStorage.setItem(KEY,JSON.stringify(inst));
+        // install suggested packages hint
+        if(pkg.suggests?.length)
+          shell.writeln(`\x1b[2mSuggested packages: ${pkg.suggests.join(' ')}\x1b[0m`);
+      }
       shell.writeln(`Processing triggers for man-db (2.11.2) ...`);
       return '';
     },
@@ -495,14 +756,15 @@ window.PKG = (() => {
       if(!inst[name])return `${name}: not installed`;
       delete inst[name]; delete CMDS[name];
       localStorage.setItem(KEY,JSON.stringify(inst));
-      return `Removing ${name}...\n(Reading database ... done)\nPurging configuration files for ${name} ...\ndpkg: warning: while removing ${name}, directory '/usr/bin' not empty`;
+      return `Removing ${name}...\n(Reading database ... done)\nPurging configuration files for ${name} ...\ndpkg: warning: while removing ${name}, directory '/usr/bin' not empty so not removed`;
     },
     list(f) {
-      const lines=['Listing...'];
+      const lines=['Listing...',''];
       for(const [n,p] of Object.entries(REGISTRY)){
         if(f&&!n.includes(f))continue;
-        const st=inst[n]?'[installed]':'[available]';
-        lines.push(`${n}/${st},${p.ver} all\n  ${p.desc}`);
+        const st=inst[n]?'\x1b[32m[installed]\x1b[0m':'[available]';
+        lines.push(`\x1b[1m${n}\x1b[0m/htmlinux ${p.ver} all ${st}`);
+        lines.push(`  ${p.desc}`);
       }
       return lines.join('\n');
     },
@@ -510,13 +772,39 @@ window.PKG = (() => {
       const r=[];
       for(const [n,p] of Object.entries(REGISTRY)){
         if(!q||n.includes(q)||p.desc.toLowerCase().includes(q.toLowerCase()))
-          r.push(`\x1b[1m${n}\x1b[0m/${inst[n]?'installed':'available'} ${p.ver}\n  ${p.desc}`);
+          r.push(`\x1b[1m${n}\x1b[0m/${inst[n]?'\x1b[32minstalled\x1b[0m':'available'} ${p.ver}\n  ${p.desc}`);
       }
-      return r.length?r.join('\n'):`No results for '${q}'`;
+      return r.length?r.join('\n\n'):`No results for '${q}'`;
     },
     show(name) {
-      const p=REGISTRY[name]; if(!p)return `E: No packages found matching ${name}`;
-      return `Package: ${name}\nVersion: ${p.ver}\nInstalled-Size: bundled\nDescription: ${p.desc}\nStatus: ${inst[name]?'installed':'not installed'}`;
+      const p=REGISTRY[name];if(!p)return `\x1b[1;31mE:\x1b[0m No packages found matching ${name}`;
+      return `Package: ${name}\nVersion: ${p.ver}\nInstalled-Size: ${p.size||'unknown'}\nDepends: ${p.deps?.join(', ')||'(none)'}\nSuggests: ${p.suggests?.join(', ')||'(none)'}\nDescription: ${p.desc}\nStatus: ${inst[name]?'\x1b[32minstalled\x1b[0m':'not installed'}`;
+    },
+    depends(name) {
+      const p=REGISTRY[name];if(!p)return `E: No packages found matching ${name}`;
+      if(!p.deps?.length)return `${name}\n  (no dependencies)`;
+      return `${name}\n${p.deps.map(d=>`  Depends: ${d}`).join('\n')}`;
+    },
+    rdepends(name) {
+      const r=Object.entries(REGISTRY).filter(([n,p])=>p.deps?.includes(name));
+      if(!r.length)return `${name}\n  (no reverse dependencies)`;
+      return `${name}\nReverse dependencies:\n${r.map(([n])=>`  Depends: ${n}`).join('\n')}`;
+    },
+    async upgradeAll(shell) {
+      const toUpgrade=Object.keys(inst).filter(n=>REGISTRY[n]);
+      if(!toUpgrade.length)return 'All packages are up to date.';
+      shell.writeln(`The following packages will be upgraded:\n  ${toUpgrade.join(' ')}`);
+      await delay(300);
+      for(const name of toUpgrade){
+        const pkg=REGISTRY[name];
+        shell.writeln(`Unpacking ${name} (${pkg.ver}) over (${inst[name].ver||pkg.ver}) ...`);
+        await delay(100);
+        shell.writeln(`Setting up ${name} (${pkg.ver}) ...`);
+        pkg.install();
+        inst[name]={ver:pkg.ver,inst:Date.now()};
+      }
+      localStorage.setItem(KEY,JSON.stringify(inst));
+      return `${toUpgrade.length} upgraded, 0 newly installed, 0 to remove.`;
     },
   };
 })();
@@ -647,7 +935,7 @@ function showHtop() {
 }
 
 // ================================================================
-// CRON scheduler (in-browser)
+// CRON scheduler
 // ================================================================
 window.CRON = (() => {
   const KEY='hl_cron';
@@ -690,10 +978,6 @@ window.CRON = (() => {
     remove(i) { jobs.splice(i,1); this.save(); },
   };
 })();
-
-// ================================================================
-// COMMANDS — BusyBox-style multi-call binary
-
 
 // ================================================================
 // USER DATABASE
@@ -750,10 +1034,8 @@ window.UserDB = (() => {
     },
     modifyUser(n,ch){
       const u=db.users.find(u=>u.name===n);if(!u)return false;
-      if(ch.gecos!==undefined)u.gecos=ch.gecos;
-      if(ch.shell!==undefined)u.shell=ch.shell;
-      if(ch.home!==undefined)u.home=ch.home;
-      if(ch.pw!==undefined&&ch.pw)u.pw=ch.pw;
+      if(ch.gecos!==undefined)u.gecos=ch.gecos;if(ch.shell!==undefined)u.shell=ch.shell;
+      if(ch.home!==undefined)u.home=ch.home;if(ch.pw!==undefined&&ch.pw)u.pw=ch.pw;
       if(ch.locked!==undefined)u.locked=ch.locked;
       save();return true;
     },
@@ -773,7 +1055,7 @@ window.UserDB = (() => {
 window.UserMgr = (() => {
   const escH=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   let ov,listEl,detailEl,sel=null,onClose=null;
-  const status=(msg,err=false)=>{const el=document.getElementById('um-status');if(el){el.textContent=msg;el.style.color=err?'#999':'#888';setTimeout(()=>{if(el)el.textContent='';},3000);}};
+  const status=(msg,err=false)=>{const el=document.getElementById('um-status');if(el){el.textContent=msg;el.style.color=err?'#ff6b6b':'#4caf50';setTimeout(()=>{if(el)el.textContent='';},3000);}};
   const renderList=()=>{
     listEl.innerHTML='';
     for(const u of UserDB.getUsers()){
@@ -814,9 +1096,7 @@ window.UserMgr = (() => {
   return {
     open(cb){
       onClose=cb||null;
-      if(!ov){
-        ov=document.getElementById('um-ov');listEl=document.getElementById('um-list');detailEl=document.getElementById('um-detail');
-      }
+      if(!ov){ov=document.getElementById('um-ov');listEl=document.getElementById('um-list');detailEl=document.getElementById('um-detail');}
       sel=UserDB.getUsers().find(u=>u.uid===ENV.uid)||UserDB.getUsers()[0];
       ov.style.display='flex';TERM.lock();renderList();renderDetail();
       document.addEventListener('keydown',onKey);
@@ -852,6 +1132,7 @@ window.UserMgr = (() => {
     isActive:()=>ov?.style.display==='flex',
   };
 })();
+
 // scope aliases
 var PKG = window.PKG;
 var CRON = window.CRON;
