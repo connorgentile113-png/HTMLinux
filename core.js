@@ -558,3 +558,11 @@ setInterval(()=>{ const n=new Date(); $('statusbar-right').textContent=n.toTimeS
 // ================================================================
 // NANO EDITOR
 // ================================================================
+// scope aliases
+var VFS = window.VFS;
+var ENV = window.ENV;
+var ANSI = window.ANSI;
+var Hist = window.Hist;
+var TERM = window.TERM;
+var BOOT_T = window.BOOT_T;
+var delay = window.delay;
