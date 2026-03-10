@@ -1,0 +1,642 @@
+window.PKG = (() => {
+  const KEY='hl_pkgs';
+  let inst={};
+
+  const REGISTRY = {
+    python: {
+      ver:'3.11.5', desc:'Python 3 interpreter',
+      install() {
+        const interp = CMDS['python3'] = CMDS['python'] = async (args, st) => {
+          if (args[0]==='-c'&&args[1]) return runPython(args[1]);
+          if (args[0]&&!args[0].startsWith('-')) {
+            const c=VFS.readFile(args[0],ENV.cwd);
+            if(c===null)return `python3: can't open file '${args[0]}'`;
+            return runPython(c);
+          }
+          TERM.writeln('Python 3.11.5 (HTMLinux) — Type "exit()" to quit');
+          return new Promise(res=>{
+            Shell.startREPL({ prompt:'>>> ',
+              exec(l){ if(l==='exit()'||l==='quit()'){Shell.exitREPL();res('');return;} const r=runPython(l); if(r)TERM.writeln(r); },
+              onExit:res });
+          });
+        };
+      }
+    },
+    node: {
+      ver:'20.9.0', desc:'Node.js JavaScript runtime',
+      install() {
+        CMDS['node']=CMDS['nodejs']=async(args)=>{
+          if(args[0]==='-e'&&args[1]) return runJS(args[1]);
+          if(args[0]&&!args[0].startsWith('-')){
+            const c=VFS.readFile(args[0],ENV.cwd);
+            if(c===null)return `node: '${args[0]}': no such file`;
+            return runJS(c);
+          }
+          TERM.writeln('Node.js v20.9.0 (HTMLinux) — Type ".exit" to quit');
+          return new Promise(res=>{
+            Shell.startREPL({ prompt:'> ',
+              exec(l){if(l==='.exit'){Shell.exitREPL();res('');return;} TERM.writeln(runJS(l));},
+              onExit:res });
+          });
+        };
+      }
+    },
+    htop: {
+      ver:'3.3.0', desc:'Interactive process viewer',
+      install() {
+        CMDS['htop']=async()=>{
+          showHtop();
+          return new Promise(r=>document.addEventListener('htop-close',()=>r(''),{once:true}));
+        };
+      }
+    },
+    neofetch: {
+      ver:'7.3.0', desc:'CLI system information tool',
+      install() {
+        CMDS['neofetch']=()=>{
+          const now=new Date(), up=Math.floor((now-BOOT_T)/1000);
+          const uh=Math.floor(up/3600), um=Math.floor((up%3600)/60), us=up%60;
+          const upStr=uh?`${uh}h ${um}m`:`${um}m ${us}s`;
+          const mem=performance.memory;
+          const usedMB=mem?Math.round(mem.usedJSHeapSize/1048576):64;
+          const totalMB=mem?Math.round(mem.jsHeapSizeLimit/1048576):8192;
+          const art=[
+            '        .',
+            '       /|\\',
+            '      / | \\',
+            '     /  |  \\',
+            '    / . | . \\',
+            '   /    |    \\',
+            '  /_____|_____\\',
+            '        |',
+            '        |',
+          ];
+          const info=[
+            `\x1b[1m${ENV.v.USER}@${ENV.v.HOSTNAME}\x1b[0m`,
+            '-'.repeat(18),
+            `OS:       HTMLinux 1.0.0 LTS`,
+            `Kernel:   6.1.0-htmlinux`,
+            `Shell:    bash 5.2.15`,
+            `Terminal: browser-tty`,
+            `CPU:      Browser vCPU x${navigator.hardwareConcurrency||4}`,
+            `Memory:   ${usedMB}MiB / ${totalMB}MiB`,
+            `Uptime:   ${upStr}`,
+            `Locale:   ${ENV.v.LANG}`,
+            `Storage:  ${Math.round(VFS.usedSpace()/1024)}K (localStorage)`,
+            '',
+            '█ █ █ █ █ █ █ █',
+          ];
+          const rows=[];
+          for(let i=0;i<Math.max(art.length,info.length);i++){
+            rows.push(`  ${(art[i]||'').padEnd(16)}  ${info[i]||''}`);
+          }
+          return rows.join('\n');
+        };
+      }
+    },
+    git: {
+      ver:'2.43.0', desc:'Distributed version control',
+      install() {
+        CMDS['git']=(args)=>{
+          const sub=args[0];
+          if(!sub)return 'usage: git <command>\nCommon: init status add commit log diff branch checkout merge stash';
+          const RK='bl2_git_'+ENV.cwd;
+          let r=null; try{r=JSON.parse(localStorage.getItem(RK)||'null');}catch{}
+          switch(sub){
+            case 'init':
+              r={commits:[],staged:[],branch:'main',branches:['main'],stash:[]};
+              localStorage.setItem(RK,JSON.stringify(r));
+              VFS.mkdir('.git',ENV.cwd);
+              return `Initialized empty Git repository in ${ENV.cwd}/.git/`;
+            case '--version': return 'git version 2.43.0 (HTMLinux)';
+            case 'status':
+              if(!r)return 'fatal: not a git repository';
+              return `On branch ${r.branch}\n${r.staged.length?'Changes to be committed:\n  '+r.staged.join('\n  '):'nothing to commit, working tree clean'}`;
+            case 'add':
+              if(!r)return 'fatal: not a git repository';
+              if(args[1]==='.'){const e=VFS.readdir(ENV.cwd)||[];r.staged=e.filter(x=>x.t==='f').map(x=>x.name);}
+              else if(args[1]&&!r.staged.includes(args[1]))r.staged.push(args[1]);
+              localStorage.setItem(RK,JSON.stringify(r)); return '';
+            case 'commit': {
+              if(!r)return 'fatal: not a git repository';
+              if(!r.staged.length)return 'nothing to commit';
+              const mi=args.indexOf('-m'), msg=mi!==-1?args[mi+1]:'Update';
+              const hash=Math.random().toString(36).slice(2,9);
+              r.commits.push({hash,msg,date:new Date().toISOString(),files:[...r.staged],branch:r.branch});
+              r.staged=[];
+              localStorage.setItem(RK,JSON.stringify(r));
+              return `[${r.branch} ${hash}] ${msg}\n ${r.commits[r.commits.length-1].files.length} file(s) changed`;
+            }
+            case 'log':
+              if(!r||!r.commits.length)return 'fatal: your current branch has no commits yet';
+              return r.commits.slice(-10).reverse().map(c=>`\x1b[1mcommit ${c.hash}\x1b[0m\nDate: ${new Date(c.date).toLocaleString()}\n\n    ${c.msg}\n`).join('\n');
+            case 'diff':
+              if(!r)return 'fatal: not a git repository';
+              return r.staged.length ? r.staged.map(f=>`diff --git a/${f} b/${f}\n--- a/${f}\n+++ b/${f}\n@@ -0,0 +1 @@\n+${VFS.readFile(f,ENV.cwd)||''}`).join('\n') : '';
+            case 'branch':
+              if(!r)return 'fatal: not a git repository';
+              if(args[1]){r.branches.push(args[1]);localStorage.setItem(RK,JSON.stringify(r));return '';}
+              return r.branches.map(b=>`${b===r.branch?'* ':' '}${b}`).join('\n');
+            case 'checkout':
+              if(!r)return 'fatal: not a git repository';
+              if(args[1]==='-b'){r.branches.push(args[2]);r.branch=args[2];localStorage.setItem(RK,JSON.stringify(r));return `Switched to new branch '${args[2]}'`;}
+              if(!r.branches.includes(args[1]))return `error: pathspec '${args[1]}' did not match any branch`;
+              r.branch=args[1]; localStorage.setItem(RK,JSON.stringify(r));
+              return `Switched to branch '${args[1]}'`;
+            case 'stash':
+              if(!r)return 'fatal: not a git repository';
+              if(args[1]==='pop'){if(!r.stash.length)return 'No stash to pop';r.staged=r.stash.pop();localStorage.setItem(RK,JSON.stringify(r));return 'Stash popped';}
+              r.stash.push([...r.staged]); r.staged=[];
+              localStorage.setItem(RK,JSON.stringify(r)); return 'Saved working directory state';
+            default: return `git: '${sub}' is not a git command. See 'git help'.`;
+          }
+        };
+      }
+    },
+    curl: {
+      ver:'8.4.0', desc:'URL data transfer tool',
+      install() {
+        CMDS['curl']=async(args)=>{
+          let url='',heads=false,method='GET',silent=false,out=null,data=null,head=false;
+          for(let i=0;i<args.length;i++){
+            if(args[i]==='-I'||args[i]==='--head')heads=true;
+            else if(args[i]==='-s'||args[i]==='--silent')silent=true;
+            else if((args[i]==='-o'||args[i]==='--output')&&args[i+1])out=args[++i];
+            else if((args[i]==='-X'||args[i]==='--request')&&args[i+1])method=args[++i];
+            else if((args[i]==='-d'||args[i]==='--data')&&args[i+1])data=args[++i];
+            else if(!args[i].startsWith('-'))url=args[i];
+          }
+          if(!url)return 'curl: no URL specified';
+          try {
+            const opts={method};
+            if(data){opts.body=data;opts.headers={'Content-Type':'application/x-www-form-urlencoded'};}
+            if(!silent)TERM.writeln(`  % Total    % Received % Xferd`);
+            const resp=await fetch(url,opts);
+            if(heads){
+              let h=`HTTP/${resp.headers.get('content-type')?'1.1':'2'} ${resp.status} ${resp.statusText}\r\n`;
+              resp.headers.forEach((v,k)=>{h+=`${k}: ${v}\r\n`;});
+              return h;
+            }
+            const text=await resp.text();
+            if(out){VFS.writeFile(out,text,ENV.cwd);return silent?'':` 100 ${text.length} 100 ${text.length}`;}
+            return text;
+          } catch(e){return `curl: (6) Could not resolve host: ${url.split('/')[2]||url}`;}
+        };
+      }
+    },
+    wget: {
+      ver:'1.21.4', desc:'Non-interactive network downloader',
+      install() {
+        CMDS['wget']=async(args)=>{
+          const url=args.find(a=>!a.startsWith('-'));
+          if(!url)return 'wget: missing URL';
+          const oi=args.indexOf('-O'), outFile=oi!==-1?args[oi+1]:(url.split('/').pop()||'index.html');
+          try {
+            TERM.writeln(`--${new Date().toISOString().slice(0,19).replace('T',' ')}--  ${url}`);
+            TERM.writeln(`Connecting to ${url.split('/')[2]}... connected.`);
+            TERM.writeln(`HTTP request sent, awaiting response...`);
+            const resp=await fetch(url);
+            const text=await resp.text();
+            TERM.writeln(`${resp.status} ${resp.statusText} [${text.length} bytes]`);
+            if(outFile==='-')return text;
+            VFS.writeFile(outFile,text,ENV.cwd);
+            TERM.writeln(`\x1b[1m'${outFile}' saved [${text.length}/${text.length}]\x1b[0m`);
+            return '';
+          } catch(e){return `wget: cannot connect to ${url.split('/')[2]||url}: Connection refused`;}
+        };
+      }
+    },
+    vim: {
+      ver:'9.1', desc:'Vi IMproved text editor',
+      install() { CMDS['vim']=CMDS['vi']=CMDS['nano']||CMDS['nano']||(async(args)=>new Promise(r=>Nano.open(args[0],()=>r('')))); }
+    },
+    lua: {
+      ver:'5.4.6', desc:'Lightweight scripting language',
+      install() {
+        CMDS['lua']=(args)=>{
+          const src=args[0]?VFS.readFile(args[0],ENV.cwd):null;
+          if(args[0]&&src===null)return `lua: cannot open '${args[0]}': No such file`;
+          const code=src||(args[0]==='-e'?args[1]:'');
+          if(!code)return 'Lua 5.4.6 -- HTMLinux (no REPL in this build, use -e or filename)';
+          // Very basic Lua subset via JS
+          const out=[];
+          try {
+            const js=code
+              .replace(/\bprint\s*\(/g,'_out.push(String(')
+              .replace(/\bend\b/g,'}')
+              .replace(/\bthen\b/g,'){')
+              .replace(/\bdo\b/g,'{')
+              .replace(/\bnot\b/g,'!')
+              .replace(/\band\b/g,'&&')
+              .replace(/\bor\b/g,'||')
+              .replace(/--[^\n]*/g,'')
+              .replace(/\bnil\b/g,'null')
+              .replace(/\bfalse\b/g,'false')
+              .replace(/\btrue\b/g,'true')
+              .replace(/function\s+(\w+)\s*\(/g,'function $1(')
+              .replace(/\blocal\s+/g,'let ');
+            const fn=new Function('_out', js+'; return _out;');
+            const result=fn(out);
+            return result.join('\n');
+          } catch(e){return `lua: ${e.message}`;}
+        };
+      }
+    },
+  };
+
+  return {
+    load() {
+      try{inst=JSON.parse(localStorage.getItem(KEY)||'{}');}catch{inst={};}
+      for(const n of Object.keys(inst)) if(REGISTRY[n]) REGISTRY[n].install();
+    },
+    async update(shell) {
+      shell.writeln(`Hit:1 https://packages.htmlinux.local stable InRelease`);
+      await delay(200);
+      shell.writeln(`Hit:2 https://packages.htmlinux.local stable/main amd64 Packages`);
+      await delay(100);
+      shell.writeln(`Reading package lists... Done`);
+      shell.writeln(`Building dependency tree... Done`);
+      shell.writeln(`All packages are up to date.`);
+      return '';
+    },
+    async install(name, shell) {
+      const pkg=REGISTRY[name];
+      if(!pkg)return `E: Unable to locate package ${name}\nDid you run apt update?`;
+      if(inst[name])return `${name} is already the newest version (${pkg.ver}).`;
+      shell.writeln(`Reading package lists... Done`);
+      shell.writeln(`The following NEW packages will be installed:\n  ${name}`);
+      shell.writeln(`After this operation, 0 B of additional disk space will be used.`);
+      await delay(150);
+      shell.writeln(`Get:1 https://packages.htmlinux.local stable/${name} ${pkg.ver} [bundled]`);
+      await delay(200);
+      shell.writeln(`Selecting previously unselected package ${name}.`);
+      shell.writeln(`Unpacking ${name} (${pkg.ver}) ...`);
+      await delay(100);
+      shell.writeln(`Setting up ${name} (${pkg.ver}) ...`);
+      pkg.install();
+      inst[name]={ver:pkg.ver,inst:Date.now()};
+      localStorage.setItem(KEY,JSON.stringify(inst));
+      shell.writeln(`Processing triggers for man-db (2.11.2) ...`);
+      return '';
+    },
+    remove(name) {
+      if(!inst[name])return `${name}: not installed`;
+      delete inst[name]; delete CMDS[name];
+      localStorage.setItem(KEY,JSON.stringify(inst));
+      return `Removing ${name}...\n(Reading database ... done)\nPurging configuration files for ${name} ...\ndpkg: warning: while removing ${name}, directory '/usr/bin' not empty`;
+    },
+    list(f) {
+      const lines=['Listing...'];
+      for(const [n,p] of Object.entries(REGISTRY)){
+        if(f&&!n.includes(f))continue;
+        const st=inst[n]?'[installed]':'[available]';
+        lines.push(`${n}/${st},${p.ver} all\n  ${p.desc}`);
+      }
+      return lines.join('\n');
+    },
+    search(q) {
+      const r=[];
+      for(const [n,p] of Object.entries(REGISTRY)){
+        if(!q||n.includes(q)||p.desc.toLowerCase().includes(q.toLowerCase()))
+          r.push(`\x1b[1m${n}\x1b[0m/${inst[n]?'installed':'available'} ${p.ver}\n  ${p.desc}`);
+      }
+      return r.length?r.join('\n'):`No results for '${q}'`;
+    },
+    show(name) {
+      const p=REGISTRY[name]; if(!p)return `E: No packages found matching ${name}`;
+      return `Package: ${name}\nVersion: ${p.ver}\nInstalled-Size: bundled\nDescription: ${p.desc}\nStatus: ${inst[name]?'installed':'not installed'}`;
+    },
+  };
+})();
+
+// ================================================================
+// Python & JS interpreters
+// ================================================================
+function runPython(code) {
+  try {
+    const lines=code.split('\n');
+    const out=[];
+    const vars={};
+    function evalE(expr) {
+      expr=expr.trim();
+      if(!expr)return undefined;
+      if((expr.startsWith('"')&&expr.endsWith('"'))||(expr.startsWith("'")&&expr.endsWith("'")))return expr.slice(1,-1);
+      if(expr==='True')return true; if(expr==='False')return false; if(expr==='None')return null;
+      if(/^-?\d+(\.\d+)?$/.test(expr))return parseFloat(expr);
+      if(expr.startsWith('[')&&expr.endsWith(']'))return expr.slice(1,-1).split(',').map(e=>evalE(e.trim()));
+      if(/^[a-zA-Z_]\w*$/.test(expr))return expr in vars?vars[expr]:undefined;
+      try {
+        const js=expr.replace(/\bTrue\b/g,'true').replace(/\bFalse\b/g,'false').replace(/\bNone\b/g,'null').replace(/\*\*/g,'**');
+        return Function(...Object.keys(vars),`"use strict";return(${js})`)(...Object.values(vars));
+      } catch{return expr;}
+    }
+    for(const raw of lines){
+      const line=raw.trim();
+      if(!line||line.startsWith('#'))continue;
+      if(line.startsWith('print(')){
+        const inner=line.slice(6,-1);
+        const parts=inner.split(',').map(p=>p.trim());
+        const vals=parts.map(p=>{const v=evalE(p);return v===null?'None':v===undefined?'':String(v);});
+        out.push(vals.join(' ')); continue;
+      }
+      if(/^[a-zA-Z_]\w*\s*=/.test(line)&&!line.includes('==')){
+        const eq=line.indexOf('=');
+        vars[line.slice(0,eq).trim()]=evalE(line.slice(eq+1).trim()); continue;
+      }
+      const v=evalE(line);
+      if(v!==undefined&&v!==null&&String(v))out.push(String(v));
+    }
+    return out.join('\n');
+  } catch(e){return `Traceback:\n  SyntaxError: ${e.message}`;}
+}
+
+function runJS(code) {
+  const logs=[];
+  const con={
+    log:(...a)=>logs.push(a.map(v=>typeof v==='object'?JSON.stringify(v):String(v)).join(' ')),
+    error:(...a)=>logs.push('\x1b[1mERROR: '+a.join(' ')+'\x1b[0m'),
+    warn:(...a)=>logs.push('WARN: '+a.join(' ')),
+    info:(...a)=>logs.push(a.join(' ')),
+    dir:(...a)=>logs.push(JSON.stringify(a[0],null,2)),
+    table:(a)=>{
+      if(Array.isArray(a)){const keys=Object.keys(a[0]||{});logs.push(keys.join('\t'));for(const r of a)logs.push(keys.map(k=>r[k]).join('\t'));}
+      else logs.push(JSON.stringify(a));
+    },
+  };
+  try {
+    const r=Function('console','require',`"use strict";${code}`)(con,(m)=>{throw new Error(`Cannot require '${m}'`);});
+    if(r!==undefined)logs.push(String(r));
+  } catch(e){logs.push(`\x1b[1m${e.name}: ${e.message}\x1b[0m`);}
+  return logs.join('\n');
+}
+
+// ================================================================
+// HTOP overlay
+// ================================================================
+function showHtop() {
+  const ov=$('htop-ov'), body=$('htop-body');
+  ov.classList.add('on'); TERM.lock();
+  let tick=0;
+  const procs=[
+    {pid:1,user:'root',pri:20,ni:0,cpu:0.0,mem:0.1,cmd:'init',time:'0:00.12'},
+    {pid:2,user:'root',pri:20,ni:0,cpu:0.0,mem:0.0,cmd:'kthreadd',time:'0:00.00'},
+    {pid:100,user:'root',pri:-20,ni:0,cpu:0.0,mem:0.0,cmd:'migration/0',time:'0:00.03'},
+    {pid:200,user:'root',pri:20,ni:0,cpu:0.1,mem:0.3,cmd:'systemd-journald',time:'0:00.41'},
+    {pid:450,user:'www-data',pri:20,ni:0,cpu:0.2,mem:1.1,cmd:'nginx: worker',time:'0:01.22'},
+    {pid:800,user:'user',pri:20,ni:0,cpu:0.0,mem:0.8,cmd:'dbus-daemon',time:'0:00.05'},
+    {pid:1000,user:'user',pri:20,ni:0,cpu:0,mem:0,cmd:'bash',time:'0:00.08'},
+    {pid:1001,user:'user',pri:20,ni:0,cpu:0,mem:0,cmd:'htop',time:'0:00.01'},
+  ];
+  const render=()=>{
+    tick++;
+    const cpu=Math.random()*8+1;
+    const mem=performance.memory;
+    const usedMB=mem?mem.usedJSHeapSize/1048576:64;
+    const totalMB=mem?mem.jsHeapSizeLimit/1048576:512;
+    const memPct=usedMB/totalMB*100;
+    const BAR=50;
+    const cpuFill=Math.round(cpu/100*BAR);
+    const memFill=Math.round(memPct/100*BAR);
+    const cpuBar='|'.repeat(cpuFill)+' '.repeat(BAR-cpuFill);
+    const memBar='|'.repeat(memFill)+' '.repeat(BAR-memFill);
+    const swap=' '.repeat(BAR);
+    const upS=Math.floor((Date.now()-BOOT_T)/1000);
+    const upStr=`${Math.floor(upS/3600)}:${String(Math.floor((upS%3600)/60)).padStart(2,'0')}:${String(upS%60).padStart(2,'0')}`;
+
+    procs[6].cpu=(Math.random()*3).toFixed(1);
+    procs[0].cpu=(Math.random()*0.5).toFixed(1);
+
+    let h='';
+    h+=`  CPU[${cpuBar}${cpu.toFixed(1)}%]   Tasks: ${procs.length}, ${tick%3===0?2:1} thr; ${tick%5===0?1:0} running\n`;
+    h+=`  Mem[${memBar}${usedMB.toFixed(0)}M/${totalMB.toFixed(0)}M]  Load avg: ${(Math.random()*0.5).toFixed(2)} ${(Math.random()*0.3).toFixed(2)} ${(Math.random()*0.2).toFixed(2)}\n`;
+    h+=`  Swp[${swap}0K/0K]       Uptime: ${upStr}\n\n`;
+    h+=`\x1b[7m  PID USER      PRI  NI  VIRT   RES   SHR S  CPU%  MEM%   TIME+  Command         \x1b[0m\n`;
+    for(const p of procs){
+      const cpuV=parseFloat(p.cpu);
+      const w=cpuV>5?'\x1b[1m':cpuV>2?'':'\x1b[2m';
+      h+=`${w}${String(p.pid).padStart(6)} ${p.user.padEnd(9)} ${String(p.pri).padStart(3)} ${String(p.ni).padStart(3)}`;
+      h+=` ${String(Math.round((cpuV+1)*1024)).padStart(6)} ${String(Math.round(usedMB*10)).padStart(5)} `;
+      h+=` ${String(Math.round(usedMB*5)).padStart(5)} S ${String(p.cpu).padStart(5)} ${String((usedMB/totalMB*100).toFixed(1)).padStart(5)}`;
+      h+=`  ${p.time.padStart(8)} ${p.cmd}\x1b[0m\n`;
+    }
+    body.innerHTML = ANSI.parse(h);
+  };
+  render();
+  const iv=setInterval(render,800);
+  const onK=(e)=>{
+    if(e.key==='q'||e.key==='F10'||(e.ctrlKey&&e.key==='c')){
+      clearInterval(iv); ov.classList.remove('on');
+      document.removeEventListener('keydown',onK);
+      TERM.unlock(); TERM.updatePrompt(); TERM.focus();
+      document.dispatchEvent(new Event('htop-close'));
+    }
+  };
+  document.addEventListener('keydown',onK);
+}
+
+// ================================================================
+// CRON scheduler (in-browser)
+// ================================================================
+window.CRON = (() => {
+  const KEY='hl_cron';
+  let jobs=[];
+  let running=false;
+
+  function parseCron(spec) {
+    const parts=spec.trim().split(/\s+/);
+    if(parts.length<5)return null;
+    return {min:parts[0],hour:parts[1],dom:parts[2],mon:parts[3],dow:parts[4]};
+  }
+
+  function matches(field, val) {
+    if(field==='*')return true;
+    if(field.includes(','))return field.split(',').some(f=>matches(f,val));
+    if(field.includes('/')) { const[base,step]=field.split('/'); const s=parseInt(step); return matches(base,val)&&val%s===0; }
+    if(field.includes('-')) { const[a,b]=field.split('-'); return val>=parseInt(a)&&val<=parseInt(b); }
+    return parseInt(field)===val;
+  }
+
+  function check() {
+    const now=new Date();
+    for(const job of jobs) {
+      const c=parseCron(job.spec);
+      if(!c)continue;
+      if(matches(c.min,now.getMinutes())&&matches(c.hour,now.getHours())&&
+         matches(c.dom,now.getDate())&&matches(c.mon,now.getMonth()+1)&&
+         matches(c.dow,now.getDay())) {
+        Shell.exec(job.cmd).then(r=>{ if(r)VFS.appendFile('/var/log/syslog', `CRON: ${job.cmd}: ${r}\n`); });
+      }
+    }
+  }
+
+  return {
+    load() { try{jobs=JSON.parse(localStorage.getItem(KEY)||'[]');}catch{jobs=[];} },
+    save() { localStorage.setItem(KEY,JSON.stringify(jobs)); },
+    start() { if(!running){running=true;setInterval(check,60000);} },
+    add(spec, cmd) { jobs.push({spec,cmd,id:Date.now()}); this.save(); },
+    list() { return jobs.map((j,i)=>`${i+1}\t${j.spec} ${j.cmd}`).join('\n'); },
+    remove(i) { jobs.splice(i,1); this.save(); },
+  };
+})();
+
+// ================================================================
+// COMMANDS — BusyBox-style multi-call binary
+
+
+// ================================================================
+// USER DATABASE
+// ================================================================
+window.UserDB = (() => {
+  const KEY = 'hl_users_v1';
+  const DEF = {
+    users: [
+      {uid:0,   gid:0,    name:'root',   home:'/root',      shell:'/bin/bash',         groups:['root'],             pw:'root', gecos:'root'},
+      {uid:33,  gid:33,   name:'www-data',home:'/var/www',  shell:'/usr/sbin/nologin', groups:['www-data'],         pw:'*',    gecos:'www-data'},
+      {uid:1000,gid:1000, name:'user',   home:'/home/user', shell:'/bin/bash',         groups:['user','sudo','adm'],pw:'user', gecos:'User,,,'},
+    ],
+    groups: [
+      {gid:0,  name:'root',     members:['root']},
+      {gid:4,  name:'adm',      members:['user']},
+      {gid:27, name:'sudo',     members:['user']},
+      {gid:33, name:'www-data', members:['www-data']},
+      {gid:1000,name:'user',    members:['user']},
+    ],
+  };
+  let db = null;
+  const syncEtc = () => {
+    VFS.writeFile('/etc/passwd', db.users.map(u=>`${u.name}:x:${u.uid}:${u.gid}:${u.gecos||''}:${u.home}:${u.shell}`).join('\n')+'\n');
+    VFS.writeFile('/etc/shadow', db.users.map(u=>`${u.name}:${u.pw==='*'?'*':'$6$'+btoa(u.name+u.pw).slice(0,43)}:19500:0:99999:7:::`).join('\n')+'\n');
+    VFS.writeFile('/etc/group', db.groups.map(g=>`${g.name}:x:${g.gid}:${g.members.join(',')}`).join('\n')+'\n');
+  };
+  const save = () => { localStorage.setItem(KEY, JSON.stringify(db)); syncEtc(); };
+  return {
+    load() { try { db=JSON.parse(localStorage.getItem(KEY)); } catch {} if(!db){db=JSON.parse(JSON.stringify(DEF));save();}else syncEtc(); },
+    getUsers:     ()=>[...db.users],
+    getGroups:    ()=>[...db.groups],
+    getUser:      n =>db.users.find(u=>u.name===n)||null,
+    getUserByUid: u =>db.users.find(x=>x.uid===u)||null,
+    getGroup:     n =>db.groups.find(g=>g.name===n)||null,
+    getGroupByGid:g =>db.groups.find(x=>x.gid===g)||null,
+    checkPw:(n,pw)=>{const u=db.users.find(u=>u.name===n);return u&&u.pw!=='*'&&u.pw===pw;},
+    addUser(opts){
+      const maxUid=Math.max(...db.users.map(u=>u.uid),999);
+      const uid=opts.uid??(maxUid<1000?1000:maxUid+1), gid=opts.gid??uid;
+      if(!db.groups.find(g=>g.gid===gid))db.groups.push({gid,name:opts.name,members:[opts.name]});
+      const u={uid,gid,name:opts.name,home:opts.home??`/home/${opts.name}`,shell:opts.shell??'/bin/bash',groups:[opts.name,...(opts.groups||[])],pw:opts.pw??'',gecos:opts.gecos??''};
+      db.users.push(u);
+      VFS.mkdir(u.home);
+      for(const f of(VFS.readdir('/etc/skel')||[]))VFS.copyFile(f.path,u.home+'/'+f.name);
+      save();return u;
+    },
+    removeUser(n,rmHome=false){
+      const u=db.users.find(u=>u.name===n);if(!u)return false;
+      db.users=db.users.filter(u=>u.name!==n);
+      for(const g of db.groups)g.members=g.members.filter(m=>m!==n);
+      db.groups=db.groups.filter(g=>!(g.name===n&&g.members.length===0));
+      if(rmHome)VFS.rmdir(u.home,true);
+      save();return true;
+    },
+    modifyUser(n,ch){
+      const u=db.users.find(u=>u.name===n);if(!u)return false;
+      if(ch.gecos!==undefined)u.gecos=ch.gecos;
+      if(ch.shell!==undefined)u.shell=ch.shell;
+      if(ch.home!==undefined)u.home=ch.home;
+      if(ch.pw!==undefined&&ch.pw)u.pw=ch.pw;
+      if(ch.locked!==undefined)u.locked=ch.locked;
+      save();return true;
+    },
+    setGroups(uname,groups){
+      for(const g of db.groups){const on=groups.includes(g.name);if(on&&!g.members.includes(uname))g.members.push(uname);else if(!on)g.members=g.members.filter(m=>m!==uname);}
+      const u=db.users.find(u=>u.name===uname);if(u)u.groups=[...groups];
+      save();
+    },
+    addGroup(n,gid){if(db.groups.find(g=>g.name===n))return false;const max=Math.max(...db.groups.map(g=>g.gid),999);db.groups.push({gid:gid??(max+1),name:n,members:[]});save();return true;},
+    removeGroup(n){if(db.groups.find(g=>g.name===n&&g.gid<100))return false;db.groups=db.groups.filter(g=>g.name!==n);for(const u of db.users)u.groups=u.groups.filter(x=>x!==n);save();return true;},
+  };
+})();
+
+// ================================================================
+// USER MANAGER TUI
+// ================================================================
+window.UserMgr = (() => {
+  const escH=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let ov,listEl,detailEl,sel=null,onClose=null;
+  const status=(msg,err=false)=>{const el=document.getElementById('um-status');if(el){el.textContent=msg;el.style.color=err?'#999':'#888';setTimeout(()=>{if(el)el.textContent='';},3000);}};
+  const renderList=()=>{
+    listEl.innerHTML='';
+    for(const u of UserDB.getUsers()){
+      const d=document.createElement('div');d.className='um-row'+(sel?.name===u.name?' sel':'');
+      d.innerHTML=`<div>${escH(u.name)}${u.locked?'<span style="font-size:10px;color:#666;margin-left:4px">[locked]</span>':''}</div><div style="font-size:11px;color:#666">uid=${u.uid}</div>`;
+      d.onclick=()=>{sel=u;renderList();renderDetail();};
+      listEl.appendChild(d);
+    }
+  };
+  const renderDetail=()=>{
+    if(!sel){detailEl.innerHTML='<p style="color:#666;padding:12px">Select a user</p>';return;}
+    const u=UserDB.getUser(sel.name)||sel;
+    const shells=['/bin/bash','/bin/sh','/bin/dash','/usr/sbin/nologin'];
+    detailEl.innerHTML=`<div style="padding:14px 16px;font-size:12px">
+      <div style="margin-bottom:12px;font-weight:700;border-bottom:1px solid #1c1c1c;padding-bottom:6px">Editing: ${escH(u.name)}</div>
+      <div class="um-field"><label>Full Name</label><input id="um-gecos" value="${escH(u.gecos||'')}"></div>
+      <div class="um-field"><label>Home</label><input id="um-home" value="${escH(u.home)}"></div>
+      <div class="um-field"><label>Shell</label><select id="um-shell">${shells.map(s=>`<option value="${s}"${u.shell===s?' selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="um-field"><label>Locked</label><input type="checkbox" id="um-locked"${u.locked?' checked':''}></div>
+      <div style="margin:10px 0 6px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#555">Groups</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">${UserDB.getGroups().map(g=>`<span class="grp-tag${u.groups?.includes(g.name)?' on':''}" data-grp="${escH(g.name)}" onclick="this.classList.toggle('on')" style="cursor:pointer;font-size:11px;padding:1px 6px;border:1px solid ${u.groups?.includes(g.name)?'#e8e8e8':'#444'};${u.groups?.includes(g.name)?'background:#e8e8e8;color:#000;':''}">${escH(g.name)}</span>`).join('')}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="um-btn" onclick="UserMgr.save()">Save</button>
+        <button class="um-btn" onclick="UserMgr.changePw()">Password</button>
+        <button class="um-btn" onclick="UserMgr.mkHome()">Create Home</button>
+        <button class="um-btn" style="color:#888;border-color:#444" onclick="UserMgr.delUser()">Delete</button>
+      </div>
+      <div id="um-status" style="margin-top:8px;min-height:18px;font-size:11px;color:#888"></div>
+    </div>`;
+  };
+  const onKey=e=>{
+    if(e.key==='q'||e.key==='Escape')UserMgr.close();
+    else if(e.key==='n'){e.preventDefault();UserMgr.newUser();}
+    else if(e.key==='s'){e.preventDefault();if(sel)UserMgr.save();}
+    else if(e.key==='p'){e.preventDefault();if(sel)UserMgr.changePw();}
+    else if(e.key==='d'){e.preventDefault();if(sel)UserMgr.delUser();}
+  };
+  return {
+    open(cb){
+      onClose=cb||null;
+      if(!ov){
+        ov=document.getElementById('um-ov');listEl=document.getElementById('um-list');detailEl=document.getElementById('um-detail');
+      }
+      sel=UserDB.getUsers().find(u=>u.uid===ENV.uid)||UserDB.getUsers()[0];
+      ov.style.display='flex';TERM.lock();renderList();renderDetail();
+      document.addEventListener('keydown',onKey);
+    },
+    save(){
+      if(!sel)return;
+      const groups=[...detailEl.querySelectorAll('.grp-tag.on')].map(t=>t.dataset.grp);
+      UserDB.setGroups(sel.name,groups);
+      UserDB.modifyUser(sel.name,{gecos:document.getElementById('um-gecos')?.value,home:document.getElementById('um-home')?.value,shell:document.getElementById('um-shell')?.value,locked:document.getElementById('um-locked')?.checked});
+      sel=UserDB.getUser(sel.name);renderList();status('Saved.');
+    },
+    changePw(){
+      if(!sel)return;
+      const p1=prompt(`New password for ${sel.name}:`);if(!p1)return;
+      const p2=prompt('Confirm:');if(p1!==p2){status('Mismatch.',true);return;}
+      UserDB.modifyUser(sel.name,{pw:p1});status('Password changed.');
+    },
+    mkHome(){if(!sel)return;VFS.mkdir(sel.home);for(const f of(VFS.readdir('/etc/skel')||[]))VFS.copyFile(f.path,sel.home+'/'+f.name);status(`${sel.home} created.`);},
+    newUser(){
+      const n=prompt('Username:');if(!n||!/^[a-z_][a-z0-9_-]*$/.test(n)){status('Invalid name.',true);return;}
+      if(UserDB.getUser(n)){status('Already exists.',true);return;}
+      const gecos=prompt('Full name:',''),pw=prompt('Password:','');
+      UserDB.addUser({name:n,gecos:gecos||'',pw:pw||''});
+      sel=UserDB.getUser(n);renderList();renderDetail();status(`User '${n}' created.`);
+    },
+    delUser(){
+      if(!sel||sel.uid<1000){status('Cannot delete system users.',true);return;}
+      if(!confirm(`Delete '${sel.name}'?`))return;
+      const rmH=confirm('Remove home directory?');
+      UserDB.removeUser(sel.name,rmH);sel=UserDB.getUsers()[0];renderList();renderDetail();status('Deleted.');
+    },
+    close(){ov.style.display='none';document.removeEventListener('keydown',onKey);TERM.unlock();TERM.updatePrompt();TERM.focus();if(onClose)onClose();},
+    isActive:()=>ov?.style.display==='flex',
+  };
+})();
