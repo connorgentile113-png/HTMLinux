@@ -170,11 +170,65 @@ window.PKG = (() => {
             } else {
               // Last resort: try common filenames
               filesToFetch = [
-                'README.md','readme.md','LICENSE','LICENSE.md','.gitignore',
-                'package.json','index.js','index.ts','index.html','index.css',
-                'main.js','main.ts','main.py','main.c','app.js','app.py','app.html',
-                'src/index.js','src/main.js','requirements.txt','Makefile',
-                'Dockerfile','tsconfig.json','vite.config.js','webpack.config.js',
+                // Docs & meta
+                'README.md','readme.md','README.txt','README','readme.txt',
+                'LICENSE','LICENSE.md','LICENSE.txt','LICENCE','COPYING',
+                'CHANGELOG.md','CHANGELOG.txt','CHANGES.md','HISTORY.md',
+                'CONTRIBUTING.md','CODE_OF_CONDUCT.md','SECURITY.md',
+                'TODO.md','TODO.txt','NOTES.md','ROADMAP.md',
+                '.gitignore','.gitattributes','.editorconfig','.env.example',
+                // Web / JS / TS
+                'index.html','index.htm','index.js','index.ts','index.jsx','index.tsx',
+                'index.css','index.scss','index.sass','index.less',
+                'main.js','main.ts','main.jsx','main.tsx','main.css',
+                'app.js','app.ts','app.jsx','app.tsx','app.html','app.css','app.vue',
+                'App.js','App.ts','App.jsx','App.tsx','App.vue',
+                'script.js','scripts.js','bundle.js','dist/index.js',
+                'style.css','styles.css','stylesheet.css','global.css','reset.css',
+                // Config
+                'package.json','package-lock.json','yarn.lock','pnpm-lock.yaml',
+                'tsconfig.json','tsconfig.base.json','jsconfig.json',
+                'vite.config.js','vite.config.ts','webpack.config.js','webpack.config.ts',
+                'rollup.config.js','esbuild.config.js','babel.config.js','.babelrc',
+                'jest.config.js','jest.config.ts','vitest.config.js',
+                '.eslintrc','.eslintrc.js','.eslintrc.json','.eslintrc.yml',
+                'eslint.config.js','eslint.config.ts','.prettierrc','.prettierrc.json',
+                'tailwind.config.js','tailwind.config.ts','postcss.config.js',
+                'next.config.js','next.config.ts','nuxt.config.js','nuxt.config.ts',
+                'svelte.config.js','astro.config.js','remix.config.js',
+                'angular.json','.angular-cli.json','ember-cli-build.js',
+                // Python
+                'main.py','app.py','run.py','server.py','api.py','cli.py',
+                'setup.py','setup.cfg','pyproject.toml','requirements.txt',
+                'requirements-dev.txt','Pipfile','Pipfile.lock','poetry.lock',
+                '__init__.py','manage.py','wsgi.py','asgi.py','settings.py',
+                'models.py','views.py','urls.py','forms.py','serializers.py',
+                // Ruby / PHP / Go / Rust / Java / C
+                'Gemfile','Gemfile.lock','Rakefile','config.ru','.ruby-version',
+                'composer.json','composer.lock','artisan','wp-config.php',
+                'go.mod','go.sum','main.go','cmd/main.go',
+                'Cargo.toml','Cargo.lock','src/main.rs','src/lib.rs',
+                'pom.xml','build.gradle','settings.gradle','gradlew',
+                'Makefile','makefile','CMakeLists.txt','configure.ac',
+                'main.c','main.cpp','main.h','src/main.c','src/main.cpp',
+                // DevOps / Config
+                'Dockerfile','docker-compose.yml','docker-compose.yaml',
+                '.dockerignore','.travis.yml','Jenkinsfile',
+                '.github/workflows/main.yml','.github/workflows/ci.yml',
+                '.gitlab-ci.yml','azure-pipelines.yml','bitbucket-pipelines.yml',
+                'kubernetes.yml','k8s.yml','helm/values.yaml',
+                // Misc
+                'server.js','client.js','router.js','routes.js','routes/index.js',
+                'controllers/index.js','models/index.js','middleware/index.js',
+                'config.js','config.json','config.yaml','config.yml','config.toml',
+                'src/index.html','src/index.js','src/index.ts','src/App.jsx','src/App.tsx',
+                'src/main.js','src/main.ts','src/main.py','src/main.rs',
+                'src/styles.css','src/global.css','src/utils.js','src/helpers.js',
+                'lib/index.js','lib/main.js','bin/index.js','bin/cli.js',
+                'public/index.html','static/index.html','web/index.html',
+                'docs/index.md','docs/README.md','wiki/Home.md',
+                'test/index.js','tests/test_main.py','spec/index.js',
+                '.env','.env.local','.env.development','.env.production',
               ];
             }
 
@@ -183,7 +237,7 @@ window.PKG = (() => {
             VFS.writeFile(destAbs + '/.git/HEAD', 'ref: refs/heads/main\n');
 
             let fetched = 0, failed = 0;
-            const rawBase = `https://raw.githubusercontent.com/\${owner}/\${repo}/HEAD/`;
+            const rawBase = `https://raw.githubusercontent.com/${owner}/${repo}/HEAD/`;
             for (const fpath of filesToFetch) {
               try {
                 const resp = await fetch(rawBase + fpath);
@@ -198,7 +252,7 @@ window.PKG = (() => {
                   VFS.writeFile(destAbs + '/' + fpath, text);
                   fetched++;
                   if (fetched <= 5 || fetched % 10 === 0)
-                    TERM.writeln(`  [\${fetched}/\${filesToFetch.length}] \${fpath}`);
+                    TERM.writeln(`  [${fetched}/${filesToFetch.length}] ${fpath}`);
                 } else { failed++; }
               } catch(e) { failed++; }
             }
@@ -212,7 +266,7 @@ window.PKG = (() => {
             VFS.writeFile(destAbs + '/.git/config',
               '[core]\n\trepositoryformatversion = 0\n[remote "origin"]\n\turl = ' + url + '\nfetch = +refs/heads/*:refs/remotes/origin/*\n');
 
-            return `\nReceiving objects: 100% (\${fetched}/\${filesToFetch.length})\nResolving deltas: done.\n\ncd \${destDir}`;
+            return `\nReceiving objects: 100% (${fetched}/${filesToFetch.length})\nResolving deltas: done.\n\ncd ${destDir}`;
           }
 
           // ── all other commands need an existing repo ──
@@ -225,11 +279,11 @@ window.PKG = (() => {
               const entries = VFS.readdir(ENV.cwd) || [];
               const tracked = new Set(r.commits.flatMap(c => c.files || []));
               const untracked = entries.filter(e => e.t==='f' && !e.name.startsWith('.') && !tracked.has(e.name) && !r.staged.includes(e.name));
-              return `On branch \${r.branch}\n\${
+              return `On branch ${r.branch}\n${
                 r.staged.length
                   ? 'Changes to be committed:\n' + r.staged.map(f=>'\t\x1b[32mmodified: '+f+'\x1b[0m').join('\n') + '\n'
                   : 'nothing to commit, working tree clean'
-              }\${untracked.length ? '\nUntracked files:\n' + untracked.map(e=>'\t'+e.name).join('\n') : ''}`;
+              }${untracked.length ? '\nUntracked files:\n' + untracked.map(e=>'\t'+e.name).join('\n') : ''}`;
             }
             case 'add':
               if (args[1]==='.'||args[1]==='-A') {
@@ -247,28 +301,28 @@ window.PKG = (() => {
               r.commits.push({ hash, msg, date:new Date().toISOString(), files:[...r.staged], author: r.config['user.name'] });
               const n = r.staged.length; r.staged = [];
               saveR(r);
-              return `[\${r.branch} \${hash}] \${msg}\n \${n} file(s) changed`;
+              return `[${r.branch} ${hash}] ${msg}\n ${n} file(s) changed`;
             }
             case 'log': {
-              if (!r.commits.length) return `fatal: your current branch '\${r.branch}' does not have any commits yet`;
+              if (!r.commits.length) return `fatal: your current branch '${r.branch}' does not have any commits yet`;
               const oneline = args.includes('--oneline');
               return r.commits.slice(-20).reverse().map(c =>
                 oneline
                   ? c.hash.slice(0,7) + ' ' + c.msg
-                  : `\x1b[33mcommit \${c.hash}\x1b[0m\nAuthor: \${c.author||r.config['user.name']}\nDate:   \${new Date(c.date).toLocaleString()}\n\n    \${c.msg}\n`
+                  : `\x1b[33mcommit ${c.hash}\x1b[0m\nAuthor: ${c.author||r.config['user.name']}\nDate:   ${new Date(c.date).toLocaleString()}\n\n    ${c.msg}\n`
               ).join('\n');
             }
             case 'diff':
               return r.staged.map(f => {
                 const content = VFS.readFile(f, ENV.cwd) || '';
                 const lines = content.split('\n');
-                return `diff --git a/\${f} b/\${f}\n--- a/\${f}\n+++ b/\${f}\n@@ -0,0 +1,\${lines.length} @@\n` + lines.map(l=>'\x1b[32m+'+l+'\x1b[0m').join('\n');
+                return `diff --git a/${f} b/${f}\n--- a/${f}\n+++ b/${f}\n@@ -0,0 +1,${lines.length} @@\n` + lines.map(l=>'\x1b[32m+'+l+'\x1b[0m').join('\n');
               }).join('\n\n') || '(no staged changes)';
             case 'branch':
               if (args[1]==='-d'||args[1]==='-D') {
                 if (args[2]===r.branch) return 'error: Cannot delete the branch you are currently on';
                 r.branches = r.branches.filter(b=>b!==args[2]); saveR(r);
-                return `Deleted branch \${args[2]}.`;
+                return `Deleted branch ${args[2]}.`;
               }
               if (args[1]) { r.branches.push(args[1]); saveR(r); return ''; }
               return r.branches.map(b=>(b===r.branch?'\x1b[32m* ':'  ')+b+'\x1b[0m').join('\n');
@@ -277,9 +331,9 @@ window.PKG = (() => {
               const bname = isNew ? args[2] : args[1];
               if (!bname) return 'usage: git checkout [-b] <branch>';
               if (isNew) { if(r.branches.includes(bname)) return 'fatal: branch already exists'; r.branches.push(bname); }
-              else if (!r.branches.includes(bname)) return `error: pathspec '\${bname}' did not match any known branch`;
+              else if (!r.branches.includes(bname)) return `error: pathspec '${bname}' did not match any known branch`;
               r.branch = bname; saveR(r);
-              return `Switched to\${isNew?' new':''} branch '\${bname}'`;
+              return `Switched to${isNew?' new':''} branch '${bname}'`;
             }
             case 'stash':
               if (args[1]==='pop') { if(!r.stash.length) return 'No stash entries found'; r.staged=r.stash.pop(); saveR(r); return 'Dropped stash@{0}'; }
@@ -294,7 +348,7 @@ window.PKG = (() => {
               if (args[1]==='--list') return Object.entries(r.config).map(([k,v])=>k+'='+v).join('\n');
               if (args[2]) { r.config[args[1]]=args[2]; saveR(r); return ''; }
               return r.config[args[1]] || '';
-            case 'push': return `To \${r.remotes?.origin?.url||'(no remote)'}
+            case 'push': return `To ${r.remotes?.origin?.url||'(no remote)'}
    (push simulated — no git server)`;
             case 'pull': return 'Already up to date.';
             case 'merge': return args[1] ? `Merge made by the 'recursive' strategy.` : 'usage: git merge <branch>';
@@ -304,9 +358,9 @@ window.PKG = (() => {
             case 'show': {
               const c = r.commits.at(-1);
               if (!c) return 'fatal: no commits yet';
-              return `\x1b[33mcommit \${c.hash}\x1b[0m\nAuthor: \${c.author||r.config['user.name']}\nDate:   \${new Date(c.date).toLocaleString()}\n\n    \${c.msg}`;
+              return `\x1b[33mcommit ${c.hash}\x1b[0m\nAuthor: ${c.author||r.config['user.name']}\nDate:   ${new Date(c.date).toLocaleString()}\n\n    ${c.msg}`;
             }
-            default: return `git: '\${sub}' is not a git command. See 'git help'.`;
+            default: return `git: '${sub}' is not a git command. See 'git help'.`;
           }
         };
       }
