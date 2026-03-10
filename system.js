@@ -95,60 +95,199 @@ window.PKG = (() => {
       }
     },
     git: {
-      ver:'2.43.0', desc:'Distributed version control',
+      ver:'2.43.0', desc:'Distributed version control (clone fetches real GitHub files)',
       install() {
-        CMDS['git']=(args)=>{
-          const sub=args[0];
-          if(!sub)return 'usage: git <command>\nCommon: init status add commit log diff branch checkout merge stash';
-          const RK='bl2_git_'+ENV.cwd;
-          let r=null; try{r=JSON.parse(localStorage.getItem(RK)||'null');}catch{}
-          switch(sub){
-            case 'init':
-              r={commits:[],staged:[],branch:'main',branches:['main'],stash:[]};
-              localStorage.setItem(RK,JSON.stringify(r));
-              VFS.mkdir('.git',ENV.cwd);
-              return `Initialized empty Git repository in ${ENV.cwd}/.git/`;
-            case '--version': return 'git version 2.43.0 (HTMLinux)';
-            case 'status':
-              if(!r)return 'fatal: not a git repository';
-              return `On branch ${r.branch}\n${r.staged.length?'Changes to be committed:\n  '+r.staged.join('\n  '):'nothing to commit, working tree clean'}`;
-            case 'add':
-              if(!r)return 'fatal: not a git repository';
-              if(args[1]==='.'){const e=VFS.readdir(ENV.cwd)||[];r.staged=e.filter(x=>x.t==='f').map(x=>x.name);}
-              else if(args[1]&&!r.staged.includes(args[1]))r.staged.push(args[1]);
-              localStorage.setItem(RK,JSON.stringify(r)); return '';
-            case 'commit': {
-              if(!r)return 'fatal: not a git repository';
-              if(!r.staged.length)return 'nothing to commit';
-              const mi=args.indexOf('-m'), msg=mi!==-1?args[mi+1]:'Update';
-              const hash=Math.random().toString(36).slice(2,9);
-              r.commits.push({hash,msg,date:new Date().toISOString(),files:[...r.staged],branch:r.branch});
-              r.staged=[];
-              localStorage.setItem(RK,JSON.stringify(r));
-              return `[${r.branch} ${hash}] ${msg}\n ${r.commits[r.commits.length-1].files.length} file(s) changed`;
+        CMDS['git'] = async (args) => {
+          const sub = args[0];
+          if (!sub || sub === 'help') return [
+            'usage: git <command>',
+            'Commands: init clone status add commit log diff branch checkout',
+            '          stash remote config push pull merge tag show --version'
+          ].join('\n');
+          if (sub === '--version') return 'git version 2.43.0 (HTMLinux)';
+
+          const repoKey = (dir) => 'hl_git_' + (dir || ENV.cwd);
+          const loadR   = (dir) => { try { return JSON.parse(localStorage.getItem(repoKey(dir)) || 'null'); } catch { return null; } };
+          const saveR   = (r, dir) => localStorage.setItem(repoKey(dir), JSON.stringify(r));
+          const newRepo = () => ({
+            commits:[], staged:[], branch:'main', branches:['main'],
+            stash:[], remotes:{}, tags:[],
+            config:{ 'user.name': ENV.v.USER || 'user', 'user.email': (ENV.v.USER||'user')+'@htmlinux' }
+          });
+
+          // ── init ──
+          if (sub === 'init') {
+            const r = newRepo();
+            saveR(r);
+            VFS.mkdir('.git', ENV.cwd);
+            VFS.writeFile('.git/HEAD', 'ref: refs/heads/main\n', ENV.cwd);
+            VFS.writeFile('.git/config', '[core]\n\trepositoryformatversion = 0\n', ENV.cwd);
+            return 'Initialized empty Git repository in ' + ENV.cwd + '/.git/';
+          }
+
+          // ── clone ──
+          if (sub === 'clone') {
+            const url = args[1];
+            if (!url) return 'usage: git clone <url> [dir]';
+            const ghMatch = url.match(/github\.com\/([\w.\-]+)\/([\w.\-]+)/);
+            if (!ghMatch) return 'fatal: only GitHub URLs are supported\nExample: git clone https://github.com/user/repo';
+            const [, owner, repoName] = ghMatch;
+            const repo    = repoName.replace(/\.git$/, '');
+            const destDir = args[2] || repo;
+            const destAbs = VFS.norm(destDir, ENV.cwd);
+
+            TERM.writeln("Cloning into '" + destDir + "'...");
+
+            // Try GitHub API to get real file list
+            let filesToFetch = [];
+            try {
+              const apiUrl = `https://api.github.com/repos/\${owner}/\${repo}/git/trees/HEAD?recursive=1`;
+              const apiResp = await fetch(apiUrl);
+              if (apiResp.ok) {
+                const data = await apiResp.json();
+                filesToFetch = (data.tree || [])
+                  .filter(f => f.type === 'blob' && f.size < 500000)
+                  .map(f => f.path);
+                TERM.writeln(`remote: Enumerating objects: \${filesToFetch.length}, done.`);
+              }
+            } catch(e) {}
+
+            // Fallback to common filenames if API failed
+            if (!filesToFetch.length) {
+              filesToFetch = ['README.md','readme.md','package.json','index.js',
+                'index.html','index.ts','main.js','main.py','app.js','app.py',
+                'LICENSE','LICENSE.md','.gitignore','requirements.txt','Makefile'];
             }
-            case 'log':
-              if(!r||!r.commits.length)return 'fatal: your current branch has no commits yet';
-              return r.commits.slice(-10).reverse().map(c=>`\x1b[1mcommit ${c.hash}\x1b[0m\nDate: ${new Date(c.date).toLocaleString()}\n\n    ${c.msg}\n`).join('\n');
+
+            VFS.mkdir(destAbs);
+            VFS.mkdir(destAbs + '/.git');
+            VFS.writeFile(destAbs + '/.git/HEAD', 'ref: refs/heads/main\n');
+
+            let fetched = 0, failed = 0;
+            const rawBase = `https://raw.githubusercontent.com/\${owner}/\${repo}/HEAD/`;
+            for (const fpath of filesToFetch) {
+              try {
+                const resp = await fetch(rawBase + fpath);
+                if (resp.ok) {
+                  const text = await resp.text();
+                  const parts = fpath.split('/');
+                  let dir = destAbs;
+                  for (let i = 0; i < parts.length - 1; i++) {
+                    dir = dir + '/' + parts[i];
+                    VFS.mkdir(dir);
+                  }
+                  VFS.writeFile(destAbs + '/' + fpath, text);
+                  fetched++;
+                  if (fetched <= 5 || fetched % 10 === 0)
+                    TERM.writeln(`  [\${fetched}/\${filesToFetch.length}] \${fpath}`);
+                } else { failed++; }
+              } catch(e) { failed++; }
+            }
+
+            if (!fetched) return 'fatal: could not fetch any files\nCheck that the repository exists and is public.';
+
+            const r = newRepo();
+            r.remotes['origin'] = { url };
+            r.commits.push({ hash: Math.random().toString(36).slice(2,9), msg: 'Initial commit (cloned)', date: new Date().toISOString(), files: [destAbs] });
+            saveR(r, destAbs);
+            VFS.writeFile(destAbs + '/.git/config',
+              '[core]\n\trepositoryformatversion = 0\n[remote "origin"]\n\turl = ' + url + '\nfetch = +refs/heads/*:refs/remotes/origin/*\n');
+
+            return `\nReceiving objects: 100% (\${fetched}/\${filesToFetch.length})\nResolving deltas: done.\n\ncd \${destDir}`;
+          }
+
+          // ── all other commands need an existing repo ──
+          const r = loadR();
+          if (!r && !['init','clone'].includes(sub))
+            return 'fatal: not a git repository (or any of the parent directories): .git';
+
+          switch(sub) {
+            case 'status': {
+              const entries = VFS.readdir(ENV.cwd) || [];
+              const tracked = new Set(r.commits.flatMap(c => c.files || []));
+              const untracked = entries.filter(e => e.t==='f' && !e.name.startsWith('.') && !tracked.has(e.name) && !r.staged.includes(e.name));
+              return `On branch \${r.branch}\n\${
+                r.staged.length
+                  ? 'Changes to be committed:\n' + r.staged.map(f=>'\t\x1b[32mmodified: '+f+'\x1b[0m').join('\n') + '\n'
+                  : 'nothing to commit, working tree clean'
+              }\${untracked.length ? '\nUntracked files:\n' + untracked.map(e=>'\t'+e.name).join('\n') : ''}`;
+            }
+            case 'add':
+              if (args[1]==='.'||args[1]==='-A') {
+                const e = VFS.readdir(ENV.cwd)||[];
+                r.staged = e.filter(x=>x.t==='f'&&!x.name.startsWith('.')).map(x=>x.name);
+              } else if (args[1] && !r.staged.includes(args[1])) {
+                r.staged.push(args[1]);
+              }
+              saveR(r); return '';
+            case 'commit': {
+              if (!r.staged.length) return 'nothing to commit, working tree clean';
+              const mi = args.indexOf('-m'), msg = mi!==-1 ? args[mi+1] : null;
+              if (!msg) return 'error: commit message required\nusage: git commit -m "message"';
+              const hash = Math.random().toString(36).slice(2,9);
+              r.commits.push({ hash, msg, date:new Date().toISOString(), files:[...r.staged], author: r.config['user.name'] });
+              const n = r.staged.length; r.staged = [];
+              saveR(r);
+              return `[\${r.branch} \${hash}] \${msg}\n \${n} file(s) changed`;
+            }
+            case 'log': {
+              if (!r.commits.length) return `fatal: your current branch '\${r.branch}' does not have any commits yet`;
+              const oneline = args.includes('--oneline');
+              return r.commits.slice(-20).reverse().map(c =>
+                oneline
+                  ? c.hash.slice(0,7) + ' ' + c.msg
+                  : `\x1b[33mcommit \${c.hash}\x1b[0m\nAuthor: \${c.author||r.config['user.name']}\nDate:   \${new Date(c.date).toLocaleString()}\n\n    \${c.msg}\n`
+              ).join('\n');
+            }
             case 'diff':
-              if(!r)return 'fatal: not a git repository';
-              return r.staged.length ? r.staged.map(f=>`diff --git a/${f} b/${f}\n--- a/${f}\n+++ b/${f}\n@@ -0,0 +1 @@\n+${VFS.readFile(f,ENV.cwd)||''}`).join('\n') : '';
+              return r.staged.map(f => {
+                const content = VFS.readFile(f, ENV.cwd) || '';
+                const lines = content.split('\n');
+                return `diff --git a/\${f} b/\${f}\n--- a/\${f}\n+++ b/\${f}\n@@ -0,0 +1,\${lines.length} @@\n` + lines.map(l=>'\x1b[32m+'+l+'\x1b[0m').join('\n');
+              }).join('\n\n') || '(no staged changes)';
             case 'branch':
-              if(!r)return 'fatal: not a git repository';
-              if(args[1]){r.branches.push(args[1]);localStorage.setItem(RK,JSON.stringify(r));return '';}
-              return r.branches.map(b=>`${b===r.branch?'* ':' '}${b}`).join('\n');
-            case 'checkout':
-              if(!r)return 'fatal: not a git repository';
-              if(args[1]==='-b'){r.branches.push(args[2]);r.branch=args[2];localStorage.setItem(RK,JSON.stringify(r));return `Switched to new branch '${args[2]}'`;}
-              if(!r.branches.includes(args[1]))return `error: pathspec '${args[1]}' did not match any branch`;
-              r.branch=args[1]; localStorage.setItem(RK,JSON.stringify(r));
-              return `Switched to branch '${args[1]}'`;
+              if (args[1]==='-d'||args[1]==='-D') {
+                if (args[2]===r.branch) return 'error: Cannot delete the branch you are currently on';
+                r.branches = r.branches.filter(b=>b!==args[2]); saveR(r);
+                return `Deleted branch \${args[2]}.`;
+              }
+              if (args[1]) { r.branches.push(args[1]); saveR(r); return ''; }
+              return r.branches.map(b=>(b===r.branch?'\x1b[32m* ':'  ')+b+'\x1b[0m').join('\n');
+            case 'checkout': {
+              const isNew = args[1]==='-b';
+              const bname = isNew ? args[2] : args[1];
+              if (!bname) return 'usage: git checkout [-b] <branch>';
+              if (isNew) { if(r.branches.includes(bname)) return 'fatal: branch already exists'; r.branches.push(bname); }
+              else if (!r.branches.includes(bname)) return `error: pathspec '\${bname}' did not match any known branch`;
+              r.branch = bname; saveR(r);
+              return `Switched to\${isNew?' new':''} branch '\${bname}'`;
+            }
             case 'stash':
-              if(!r)return 'fatal: not a git repository';
-              if(args[1]==='pop'){if(!r.stash.length)return 'No stash to pop';r.staged=r.stash.pop();localStorage.setItem(RK,JSON.stringify(r));return 'Stash popped';}
-              r.stash.push([...r.staged]); r.staged=[];
-              localStorage.setItem(RK,JSON.stringify(r)); return 'Saved working directory state';
-            default: return `git: '${sub}' is not a git command. See 'git help'.`;
+              if (args[1]==='pop') { if(!r.stash.length) return 'No stash entries found'; r.staged=r.stash.pop(); saveR(r); return 'Dropped stash@{0}'; }
+              if (args[1]==='list') return r.stash.map((_,i)=>'stash@{'+i+'}: WIP on '+r.branch).join('\n') || '(empty stash)';
+              r.stash.push([...r.staged]); r.staged=[]; saveR(r);
+              return 'Saved working directory and index state WIP on ' + r.branch;
+            case 'remote':
+              if (args[1]==='add') { if(!args[2]||!args[3]) return 'usage: git remote add <name> <url>'; r.remotes[args[2]]={url:args[3]}; saveR(r); return ''; }
+              if (args[1]==='-v') return Object.entries(r.remotes).map(([n,{url}])=>n+'\t'+url+' (fetch)\n'+n+'\t'+url+' (push)').join('\n') || '(no remotes)';
+              return Object.keys(r.remotes).join('\n') || '(no remotes)';
+            case 'config':
+              if (args[1]==='--list') return Object.entries(r.config).map(([k,v])=>k+'='+v).join('\n');
+              if (args[2]) { r.config[args[1]]=args[2]; saveR(r); return ''; }
+              return r.config[args[1]] || '';
+            case 'push': return `To \${r.remotes?.origin?.url||'(no remote)'}
+   (push simulated — no git server)`;
+            case 'pull': return 'Already up to date.';
+            case 'merge': return args[1] ? `Merge made by the 'recursive' strategy.` : 'usage: git merge <branch>';
+            case 'tag':
+              if (args[1]) { r.tags.push({name:args[1], hash:r.commits.at(-1)?.hash||''}); saveR(r); return ''; }
+              return r.tags.map(t=>t.name).join('\n');
+            case 'show': {
+              const c = r.commits.at(-1);
+              if (!c) return 'fatal: no commits yet';
+              return `\x1b[33mcommit \${c.hash}\x1b[0m\nAuthor: \${c.author||r.config['user.name']}\nDate:   \${new Date(c.date).toLocaleString()}\n\n    \${c.msg}`;
+            }
+            default: return `git: '\${sub}' is not a git command. See 'git help'.`;
           }
         };
       }
