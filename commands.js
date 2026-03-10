@@ -12,11 +12,11 @@ window.CMDS = {
     ENV.v.OLDPWD=ENV.cwd; ENV.cwd=abs; ENV.v.PWD=abs;
     return '';
   },
-  pwd(args){ return args.includes('-L')||!args.includes('-P')?ENV.cwd:ENV.cwd; },
+  pwd(args){ return ENV.cwd; },
 
-  // ── Listing ──────────────────────────────────────────────────────
+  // ── Listing ─────────────────────────────────────────────────────
   ls(args) {
-    let a=false,A=false,l=false,h=false,t=false,S=false,r=false,F=false,R=false,one=false,color=true,si=false;
+    let a=false,A=false,l=false,h=false,t=false,S=false,r=false,F=false,R=false,one=false,color=true;
     const paths=[];
     for(const x of args){
       if(x.startsWith('-')&&!x.startsWith('--')){
@@ -25,21 +25,19 @@ window.CMDS = {
         if(x.includes('t'))t=true; if(x.includes('S'))S=true;
         if(x.includes('r'))r=true; if(x.includes('F'))F=true;
         if(x.includes('R'))R=true; if(x.includes('1'))one=true;
-        if(x.includes('n'))color=false; if(x.includes('s'))si=true;
+        if(x.includes('n'))color=false;
       } else paths.push(x);
     }
     if(!paths.length)paths=['.'];
-
     const colorName=(e)=>{
-      if(!color)return e.name+(e.t==='d'?(F?'/':''):e.t==='l'?(F?'@':''):(e.m&&(e.m&0o111))?(F?'*':''):'');
+      if(!color)return e.name+(e.t==='d'?(F?'/':''):e.t==='l'?(F?'@':''):'');
       let n=e.name;
       const suf=e.t==='d'?(F?'/':''):e.t==='l'?(F?'@':''):'';
-      if(e.t==='d') return `\x1b[1m${n}${suf}\x1b[0m`;
-      if(e.t==='l') return `\x1b[4m${n}${suf}\x1b[0m`;
-      if(e.m&&(e.m&0o111)) return `\x1b[1m${n}${suf}\x1b[0m`;
+      if(e.t==='d') return `\x1b[1;34m${n}${suf}\x1b[0m`;
+      if(e.t==='l') return `\x1b[1;36m${n}${suf}\x1b[0m`;
+      if(e.m&&(e.m&0o111)) return `\x1b[1;32m${n}${suf}\x1b[0m`;
       return n+suf;
     };
-
     const doDir=(p,prefix='')=>{
       let entries=VFS.readdir(p,ENV.cwd)||[];
       if(!a&&!A)entries=entries.filter(e=>!e.name.startsWith('.'));
@@ -47,7 +45,6 @@ window.CMDS = {
       else if(S)entries.sort((a,b)=>VFS.size(b.path)-VFS.size(a.path));
       else entries.sort((a,b)=>a.name.localeCompare(b.name));
       if(r)entries.reverse();
-
       if(l){
         const total=entries.reduce((s,e)=>s+Math.ceil(VFS.size(e.path)/512),0);
         const lines=entries.map(e=>{
@@ -61,10 +58,9 @@ window.CMDS = {
         });
         return (prefix?`${prefix}:\n`:'')+`total ${total}\n`+lines.join('\n');
       }
-      if(one||!process?.stdout?.columns) return (prefix?`${prefix}:\n`:'')+entries.map(e=>colorName(e)).join('\n');
+      if(one)return (prefix?`${prefix}:\n`:'')+entries.map(e=>colorName(e)).join('\n');
       return (prefix?`${prefix}:\n`:'')+entries.map(e=>colorName(e)).join('  ');
     };
-
     const results=[];
     for(const p of paths){
       const node=VFS.stat(p,ENV.cwd);
@@ -102,18 +98,9 @@ window.CMDS = {
     if(!ps.length)return 'tail: missing file';
     return ps.map(p=>{const c=VFS.readFile(p,ENV.cwd);if(c===null)return `tail: ${p}: No such file`;return(ps.length>1?`==> ${p} <==\n`:'')+c.split('\n').slice(-n).join('\n');}).join('\n');
   },
-  tac(args){
-    if(!args.length)return 'tac: missing file';
-    return args.map(p=>{const c=VFS.readFile(p,ENV.cwd);if(c===null)return `tac: ${p}: No such file`;return c.split('\n').reverse().join('\n');}).join('\n');
-  },
-  rev(args){
-    if(!args.length)return 'rev: missing file';
-    return args.map(p=>{const c=VFS.readFile(p,ENV.cwd);if(c===null)return `rev: ${p}: No such file`;return c.split('\n').map(l=>[...l].reverse().join('')).join('\n');}).join('\n');
-  },
-  nl(args){
-    if(!args.length)return 'nl: missing file';
-    return args.map(p=>{const c=VFS.readFile(p,ENV.cwd);if(c===null)return `nl: ${p}: No such file`;let n=1;return c.split('\n').map(l=>l.trim()?`${String(n++).padStart(6)}\t${l}`:l).join('\n');}).join('\n');
-  },
+  tac(args){if(!args.length)return 'tac: missing file';return args.map(p=>{const c=VFS.readFile(p,ENV.cwd);if(c===null)return `tac: ${p}: No such file`;return c.split('\n').reverse().join('\n');}).join('\n');},
+  rev(args){if(!args.length)return 'rev: missing file';return args.map(p=>{const c=VFS.readFile(p,ENV.cwd);if(c===null)return `rev: ${p}: No such file`;return c.split('\n').map(l=>[...l].reverse().join('')).join('\n');}).join('\n');},
+  nl(args){if(!args.length)return 'nl: missing file';return args.map(p=>{const c=VFS.readFile(p,ENV.cwd);if(c===null)return `nl: ${p}: No such file`;let n=1;return c.split('\n').map(l=>l.trim()?`${String(n++).padStart(6)}\t${l}`:l).join('\n');}).join('\n');},
   fold(args){
     let w=80;const ps=[];
     for(let i=0;i<args.length;i++){if((args[i]==='-w')&&args[i+1])w=parseInt(args[++i]);else ps.push(args[i]);}
@@ -131,7 +118,6 @@ window.CMDS = {
     for(let i=0;i<lines.length;i+=cols)rows.push(lines.slice(i,i+cols).map(s=>s.padEnd(maxLen+2)).join(''));
     return rows.join('\n');
   },
-
   touch(args){
     if(!args.length)return 'touch: missing operand';
     for(const a of args){const abs=VFS.norm(a,ENV.cwd);if(!VFS.exists(abs))VFS.writeFile(abs,'');else{const n=VFS._raw()[abs];if(n)n.mt=Date.now();VFS.save();}}
@@ -150,7 +136,7 @@ window.CMDS = {
   rmdir(args){if(!args.length)return 'rmdir: missing operand';for(const a of args)if(!VFS.rmdir(a,false,ENV.cwd))TERM.writeln(`rmdir: failed to remove '${a}': Directory not empty`);return '';},
   rm(args){
     let rf=false,f=false;const ps=[];
-    for(const a of args){if(a==='-r'||a==='-R'||a==='--recursive')rf=true;else if(a==='-f')f=true;else if(a==='-rf'||a==='-fr'||a==='-Rf'||a==='-fr')rf=f=true;else ps.push(a);}
+    for(const a of args){if(a==='-r'||a==='-R'||a==='--recursive')rf=true;else if(a==='-f')f=true;else if(a==='-rf'||a==='-fr'||a==='-Rf')rf=f=true;else ps.push(a);}
     if(!ps.length)return f?'':'rm: missing operand';
     for(const p of ps){
       const n=VFS.stat(p,ENV.cwd);
@@ -244,21 +230,9 @@ window.CMDS = {
       return `${p}: binary data`;
     }).join('\n');
   },
-  realpath(args){
-    if(!args.length)return 'realpath: missing operand';
-    return args.map(p=>VFS.norm(p,ENV.cwd)).join('\n');
-  },
-  basename(args){
-    if(!args.length)return 'basename: missing operand';
-    let name=args[0].split('/').pop();
-    if(args[1]&&name.endsWith(args[1]))name=name.slice(0,-args[1].length);
-    return name;
-  },
-  dirname(args){
-    if(!args.length)return 'dirname: missing operand';
-    const p=args[0].replace(/\/+$/,'');
-    return p.includes('/')?p.slice(0,p.lastIndexOf('/'))||'/':'.';
-  },
+  realpath(args){if(!args.length)return 'realpath: missing operand';return args.map(p=>VFS.norm(p,ENV.cwd)).join('\n');},
+  basename(args){if(!args.length)return 'basename: missing operand';let name=args[0].split('/').pop();if(args[1]&&name.endsWith(args[1]))name=name.slice(0,-args[1].length);return name;},
+  dirname(args){if(!args.length)return 'dirname: missing operand';const p=args[0].replace(/\/+$/,'');return p.includes('/')?p.slice(0,p.lastIndexOf('/'))||'/':'.';},
   mktemp(args){
     const tmpdir=ENV.v.TMPDIR||'/tmp';
     const name=args.find(a=>a.includes('XXX'))||'tmp.XXXXXX';
@@ -266,6 +240,17 @@ window.CMDS = {
     const p=`${tmpdir}/${n}`;
     if(args.includes('-d'))VFS.mkdir(p);else VFS.writeFile(p,'');
     return p;
+  },
+  install(args){
+    const files=args.filter(a=>!a.startsWith('-'));
+    if(files.length<2)return 'install: missing destination';
+    const dst=files[files.length-1];
+    for(const f of files.slice(0,-1)){
+      const content=VFS.readFile(f,ENV.cwd);
+      if(content===null)return `install: cannot stat '${f}': No such file`;
+      VFS.writeFile(VFS.norm(f.split('/').pop(),VFS.norm(dst,ENV.cwd)),content,ENV.cwd);
+    }
+    return '';
   },
 
   // ── Text processing ─────────────────────────────────────────────
@@ -279,7 +264,7 @@ window.CMDS = {
   printf(args){
     if(!args.length)return '';
     let fmt=args[0].replace(/\\n/g,'\n').replace(/\\t/g,'\t');
-    const rest=args.slice(1); let i=0;
+    const rest=args.slice(1);let i=0;
     return fmt.replace(/%[sd%dfox]/g,m=>{
       if(m==='%%')return '%';
       const v=rest[i++]||'';
@@ -308,7 +293,7 @@ window.CMDS = {
     if(F2)pat=pat.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
     if(w)pat=`\\b${pat}\\b`;
     const flags=i2?'gi':'g';
-    let re; try{re=new RegExp(pat,flags);}catch{return `grep: invalid regex: ${pat}`;}
+    let re;try{re=new RegExp(pat,flags);}catch{return `grep: invalid regex: ${pat}`;}
     const search=(p,prefix='')=>{
       const content=VFS.readFile(p,ENV.cwd);
       if(content===null)return `grep: ${p}: No such file`;
@@ -317,7 +302,7 @@ window.CMDS = {
       if(l){const found=lines.some(x=>{const m=re.test(x);re.lastIndex=0;return v2?!m:m;});return found?p:'';}
       const results=[];
       lines.forEach((line,idx)=>{
-        const match=re.test(line); re.lastIndex=0;
+        const match=re.test(line);re.lastIndex=0;
         if(v2?!match:match){
           let out2=prefix?`\x1b[35m${prefix}\x1b[0m:`:'';
           if(n2)out2+=`\x1b[2m${idx+1}\x1b[0m:`;
@@ -371,12 +356,11 @@ window.CMDS = {
     if(args[0]&&!args[0].startsWith('-'))prog=args[0];
     const procLine=(line)=>{
       const fields=FS2===' '?line.trim().split(/\s+/):line.split(FS2);
-      const NF=fields.length,NR=1;
+      const NF=fields.length;
       const get=(e)=>{
         if(e==='$0')return line;
         if(e.startsWith('$')){const n2=parseInt(e.slice(1));return fields[n2-1]??'';}
         if(e==='NF')return NF;
-        if(e==='NR')return NR;
         return e.replace(/^["']|["']$/g,'');
       };
       const m=prog.match(/\{print\s+(.*?)\}/s);
@@ -400,12 +384,7 @@ window.CMDS = {
     if(!ps.length)return 'sort: no input';
     let lines=ps.map(p=>VFS.readFile(p,ENV.cwd)||'').join('\n').split('\n');
     if(u)lines=[...new Set(lines)];
-    lines.sort((a,b)=>{
-      let av=field?a.split(/\s+/)[field]||a:a;
-      let bv=field?b.split(/\s+/)[field]||b:b;
-      if(f){av=av.toLowerCase();bv=bv.toLowerCase();}
-      return n2?parseFloat(av)-parseFloat(bv):av.localeCompare(bv);
-    });
+    lines.sort((a,b)=>{let av=field?a.split(/\s+/)[field]||a:a;let bv=field?b.split(/\s+/)[field]||b:b;if(f){av=av.toLowerCase();bv=bv.toLowerCase();}return n2?parseFloat(av)-parseFloat(bv):av.localeCompare(bv);});
     if(r)lines.reverse();
     return lines.join('\n');
   },
@@ -489,8 +468,7 @@ window.CMDS = {
     const al=a.split('\n'),bl=b.split('\n');
     if(a===b)return '';
     const lines=[];
-    lines.push(`--- ${ps[0]}`);
-    lines.push(`+++ ${ps[1]}`);
+    lines.push(`--- ${ps[0]}`);lines.push(`+++ ${ps[1]}`);
     const max=Math.max(al.length,bl.length);
     lines.push(`@@ -1,${al.length} +1,${bl.length} @@`);
     for(let i=0;i<max;i++){
@@ -535,9 +513,268 @@ window.CMDS = {
     return Object.keys(VFS._raw()).filter(k=>k.toLowerCase().includes(pat)).join('\n');
   },
 
-  // ── System ───────────────────────────────────────────────────────
+  // ── NEW v2: tee, xargs, time, cal, units, apropos, whatis ───────
+  tee(args){
+    const append=args.includes('-a');
+    const files=args.filter(a=>!a.startsWith('-'));
+    return (input)=>{
+      if(input===undefined||input===null)return '';
+      for(const f of files){if(append)VFS.appendFile(f,input,ENV.cwd);else VFS.writeFile(f,input,ENV.cwd);}
+      return input;
+    };
+  },
+
+  xargs(args){
+    return async(input)=>{
+      if(!input)return '';
+      const cmd=args[0]||'echo';
+      const items=input.trim().split(/\s+/);
+      const results=[];
+      for(const item of items){
+        const r=await Shell.exec(`${cmd} ${item}`);
+        if(r&&r.trim())results.push(r.trim());
+      }
+      return results.join('\n');
+    };
+  },
+
+  async time(args){
+    if(!args.length)return 'time: missing command';
+    const t0=performance.now();
+    const result=await Shell.exec(args.join(' '));
+    const elapsed=((performance.now()-t0)/1000).toFixed(3);
+    if(result&&result.trim())TERM.writeln(result);
+    return `\nreal\t0m${elapsed}s\nuser\t0m0.000s\nsys\t0m0.000s`;
+  },
+
+  cal(args){
+    const now=new Date();
+    const month=parseInt(args[0])||now.getMonth()+1;
+    const year=parseInt(args[1])||now.getFullYear();
+    const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const header=`      ${months[month-1]} ${year}`;
+    const dayHdr='Su Mo Tu We Th Fr Sa';
+    const first=new Date(year,month-1,1).getDay();
+    const total=new Date(year,month,0).getDate();
+    const today=now.getDate();
+    const isCurrentMonth=(month===now.getMonth()+1&&year===now.getFullYear());
+    const rows=[''];let col=first;
+    for(let i=0;i<first;i++)rows[0]+='   ';
+    for(let d=1;d<=total;d++){
+      const s=isCurrentMonth&&d===today?`\x1b[7m${String(d).padStart(2)}\x1b[0m`:String(d).padStart(2);
+      rows[rows.length-1]+=s+' ';
+      if(++col===7&&d<total){rows.push('');col=0;}
+    }
+    return [header,dayHdr,...rows].join('\n');
+  },
+
+  units(args){
+    const table={'km->miles':0.621371,'miles->km':1.60934,'kg->lbs':2.20462,'lbs->kg':0.453592,'gb->mb':1024,'mb->gb':1/1024,'mb->kb':1024,'kb->mb':1/1024,'kb->bytes':1024,'bytes->kb':1/1024,'in->cm':2.54,'cm->in':0.393701,'ft->m':0.3048,'m->ft':3.28084,'oz->g':28.3495,'g->oz':0.035274,'gal->l':3.78541,'l->gal':0.264172,'mph->kph':1.60934,'kph->mph':0.621371,'rad->deg':57.2958,'deg->rad':0.017453};
+    const v=parseFloat(args[0]);const from=args[1]?.toLowerCase();const to=args[2]?.toLowerCase();
+    if(!from||!to||isNaN(v))return 'usage: units <value> <from> <to>\nExamples: units 100 km miles\n          units 72 f c\nSupported: km/miles, kg/lbs, gb/mb, kb/bytes, in/cm, ft/m, oz/g, gal/l, mph/kph, deg/rad, c/f';
+    if(from==='c'&&to==='f')return `${v}°C = ${(v*9/5+32).toFixed(2)}°F`;
+    if(from==='f'&&to==='c')return `${v}°F = ${((v-32)*5/9).toFixed(2)}°C`;
+    const factor=table[`${from}->${to}`];
+    if(!factor)return `units: unknown conversion: ${from} -> ${to}`;
+    return `${v} ${from} = ${(v*factor).toFixed(4)} ${to}`;
+  },
+
+  apropos(args){
+    const q=args.join(' ').toLowerCase();
+    if(!q)return 'apropos: missing keyword';
+    const cmds=Object.keys(CMDS).filter(k=>!k.startsWith('_'));
+    const matches=cmds.filter(c=>c.includes(q));
+    return matches.length?matches.map(c=>`${c} (1)            - HTMLinux v2 built-in`).join('\n'):`apropos: nothing appropriate for '${q}'`;
+  },
+
+  whatis(args){
+    const descs={ls:'list directory contents',cat:'concatenate files and print',grep:'search for patterns',sed:'stream editor',awk:'pattern scanning language',find:'search for files in a hierarchy',tar:'archive utility',curl:'transfer a URL',wget:'non-interactive downloader',git:'distributed version control',nano:'simple text editor',apt:'package manager',ps:'report process status',kill:'send signal to process',df:'report disk space',du:'estimate file space usage',chmod:'change file permissions',time:'measure command execution time',cal:'display a calendar',units:'unit conversion utility',bc:'arbitrary precision calculator',ssh:'secure shell client',ping:'send ICMP echo request',tee:'read stdin, write to files and stdout',xargs:'build and execute commands from stdin',nproc:'print number of processors',watch:'execute a command repeatedly',htop:'interactive process viewer',jq:'JSON processor',openssl:'cryptographic tools',traceroute:'trace network path to host',nmap:'network port scanner',strace:'trace system calls',vmstat:'virtual memory statistics',cal:'display a calendar',script:'record terminal session'};
+    return args.map(a=>descs[a]?`${a} (1)            - ${descs[a]}`:`${a}: nothing appropriate`).join('\n');
+  },
+
+  info(args){
+    const topic=args.find(a=>!a.startsWith('-'));
+    if(!topic)return 'info: try "info <command>"\nTopics available: bash, coreutils, grep, sed, apt';
+    return `info: ${topic}: use 'man ${topic}' for documentation in HTMLinux v2.`;
+  },
+
+  nproc(){return String(navigator.hardwareConcurrency||4);},
+
+  getconf(args){
+    const vals={'PAGE_SIZE':'4096','PAGESIZE':'4096','_NPROCESSORS_ONLN':String(navigator.hardwareConcurrency||4),'LONG_BIT':'64','WORD_BIT':'32','PATH_MAX':'4096','NAME_MAX':'255','ARG_MAX':'2097152','OPEN_MAX':'1024'};
+    if(!args[0])return Object.entries(vals).map(([k,v])=>`${k} = ${v}`).join('\n');
+    return vals[args[0]]??`getconf: ${args[0]}: unknown variable`;
+  },
+
+  vmstat(){
+    const free=Math.floor(Math.random()*512000+512000);
+    return `procs -----------memory---------- ---swap-- -----io---- -system-- ------cpu-----\n r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st\n 1  0      0 ${free}   1024  65536    0    0     0     0  100  200  2  1 97  0  0`;
+  },
+
+  iostat(){
+    return `Linux 6.1.0-htmlinux (htmlinux)\t${new Date().toLocaleDateString()}\t_x86_64_\t(${navigator.hardwareConcurrency||4} CPU)\n\navg-cpu:  %user   %nice %system %iowait  %steal   %idle\n           2.00    0.00    1.00    0.00    0.00   97.00\n\nDevice            tps    kB_read/s    kB_wrtn/s\nvda              1.00         0.00         4.00`;
+  },
+
+  mpstat(){
+    const cpus=navigator.hardwareConcurrency||4;
+    const lines=[`Linux 6.1.0-htmlinux  ${new Date().toLocaleDateString()}  (${cpus} CPU)`,'','CPU  %usr   %nice  %sys  %iowait  %idle'];
+    for(let i=0;i<cpus;i++)lines.push(`  ${i}   2.00   0.00   1.00     0.00   97.00`);
+    return lines.join('\n');
+  },
+
+  traceroute(args){
+    const host=args.find(a=>!a.startsWith('-'))||'example.com';
+    return [`traceroute to ${host}, 30 hops max, 60 byte packets`,` 1  192.168.1.1 (192.168.1.1)  1.234 ms  1.100 ms  0.987 ms`,` 2  10.0.0.1 (10.0.0.1)  12.345 ms  11.987 ms  12.010 ms`,` 3  ${host} (93.184.216.34)  45.678 ms  44.321 ms  45.100 ms`].join('\n');
+  },
+
+  mtr(args){
+    const host=args.find(a=>!a.startsWith('-'))||'example.com';
+    return `My traceroute [v0.95] to ${host}\n Host                            Loss%   Snt   Avg  Best  Wrst\n 1. 192.168.1.1                    0.0%    10   1.3   1.1   1.6\n 2. ${host}                   0.0%    10  44.8  43.2  46.1`;
+  },
+
+  host(args){
+    const name=args[0];if(!name)return 'usage: host name';
+    if(name==='localhost')return 'localhost has address 127.0.0.1\nlocalhost has IPv6 address ::1';
+    return `${name} has address 93.184.216.34\n${name} mail is handled by 0 .`;
+  },
+
+  whois(args){
+    const name=args[0];if(!name)return 'usage: whois domain';
+    return `Domain Name: ${name.toUpperCase()}\nRegistrar: Example Registrar, Inc.\nCreation Date: 1995-08-14T04:00:00Z\nExpiry Date: 2025-08-13T04:00:00Z\nName Server: NS1.EXAMPLE.COM\nDNSSEC: unsigned\n\n(whois data is simulated in HTMLinux v2)`;
+  },
+
+  nc(args){
+    const host=args.find(a=>!a.startsWith('-'));const port=args[args.length-1];
+    if(!host)return 'usage: nc [options] host port';
+    return `nc: connect to ${host} port ${port} (tcp) failed: Connection refused\n(network is simulated in HTMLinux v2)`;
+  },
+
+  nmap(args){
+    const host=args.find(a=>!a.startsWith('-'))||'localhost';
+    return `Starting Nmap 7.94\nNmap scan report for ${host} (127.0.0.1)\nHost is up (0.00010s latency).\n\nPORT     STATE SERVICE\n22/tcp   open  ssh\n80/tcp   open  http\n443/tcp  open  https\n3306/tcp closed mysql\n\nNmap done: 1 IP address (1 host up) scanned in 0.12 seconds`;
+  },
+
+  iptables(args){
+    if(args.includes('-L')||args.includes('--list'))
+      return `Chain INPUT (policy ACCEPT)\ntarget  prot opt source    destination\nACCEPT  all  --  anywhere  anywhere state RELATED,ESTABLISHED\n\nChain FORWARD (policy DROP)\n\nChain OUTPUT (policy ACCEPT)`;
+    return '';
+  },
+
+  route(args){
+    return `Kernel IP routing table\nDestination  Gateway      Genmask          Flags Metric Iface\n0.0.0.0      192.168.1.1  0.0.0.0          UG    100    eth0\n192.168.1.0  0.0.0.0      255.255.255.0    U     100    eth0`;
+  },
+
+  openssl(args){
+    const sub=args[0];
+    if(sub==='version')return 'OpenSSL 3.1.4 24 Oct 2023';
+    if(sub==='rand'&&args.includes('-hex')){
+      const n=parseInt(args[args.indexOf('-hex')+1])||16;
+      return [...Array(n)].map(()=>Math.floor(Math.random()*256).toString(16).padStart(2,'0')).join('');
+    }
+    if(sub==='base64'){
+      const dec=args.includes('-d');
+      const f=args.find(a=>!a.startsWith('-')&&a!=='base64');
+      const txt=f?(VFS.readFile(f,ENV.cwd)||''):args[args.length-1]||'';
+      try{return dec?atob(txt.trim()):btoa(txt);}catch{return 'openssl: invalid input';}
+    }
+    return `OpenSSL 3.1.4\nusage: openssl [version|rand|base64|...]`;
+  },
+
+  sha1sum(args){
+    if(!args.length)return 'sha1sum: missing file';
+    return args.map(p=>{const c=VFS.readFile(p,ENV.cwd);if(c===null)return `sha1sum: ${p}: No such file`;let h=0x67452301;for(let i=0;i<c.length;i++)h=Math.imul(h^c.charCodeAt(i),0x9e3779b9)|0;return Math.abs(h).toString(16).padStart(40,'0')+'  '+p;}).join('\n');
+  },
+  sha512sum(args){
+    if(!args.length)return 'sha512sum: missing file';
+    return args.map(p=>{const c=VFS.readFile(p,ENV.cwd);if(c===null)return `sha512sum: ${p}: No such file`;let h=0x6a09e667;for(let i=0;i<c.length;i++)h=Math.imul(h^c.charCodeAt(i),0xbb67ae85)|0;return Math.abs(h).toString(16).padStart(128,'0')+'  '+p;}).join('\n');
+  },
+
+  base32(args){
+    const decode=args.includes('-d')||args.includes('--decode');
+    const files=args.filter(a=>!a.startsWith('-'));
+    const text=files.length?(VFS.readFile(files[0],ENV.cwd)||''):'';
+    if(!text)return `base32: no input`;
+    const CHARS='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    if(decode){
+      const clean=text.replace(/[^A-Z2-7]/g,'');
+      let bits='',out='';
+      for(const c of clean)bits+=CHARS.indexOf(c).toString(2).padStart(5,'0');
+      for(let i=0;i+8<=bits.length;i+=8)out+=String.fromCharCode(parseInt(bits.slice(i,i+8),2));
+      return out;
+    }
+    let bits='',out='';
+    for(let i=0;i<text.length;i++)bits+=text.charCodeAt(i).toString(2).padStart(8,'0');
+    while(bits.length%5)bits+='0';
+    for(let i=0;i<bits.length;i+=5)out+=CHARS[parseInt(bits.slice(i,i+5),2)];
+    while(out.length%8)out+='=';
+    return out;
+  },
+
+  strace(args){
+    const cmd=args.find(a=>!a.startsWith('-'))||'cmd';
+    return `execve("/usr/bin/${cmd}", ["${cmd}"], /* env */) = 0\nbrk(NULL) = 0x55a3c4c75000\narch_prctl(ARCH_SET_FS, 0x7f...) = 0\nmmap(NULL, 8192, ...) = 0x7f2b4c000000\n+++ exited with 0 +++`;
+  },
+
+  lsattr(args){
+    const dir=args.find(a=>!a.startsWith('-'))||'.';
+    const entries=VFS.readdir(dir,ENV.cwd)||[];
+    return entries.map(e=>`-------------e-- ${e.name}`).join('\n');
+  },
+  chattr(){return '';},
+
+  gpg(args){
+    if(args.includes('--version'))return 'gpg (GnuPG) 2.2.40\nlibgcrypt 1.10.1';
+    if(args.includes('-k')||args.includes('--list-keys'))return 'pub   rsa4096 2023-01-01 [SC]\n      ABCDEF1234567890ABCDEF1234567890ABCDEF12\nuid   [ultimate] HTMLinux User <user@htmlinux>\nsub   rsa4096 2023-01-01 [E]';
+    return 'gpg: (stub) cryptographic operations are simulated in HTMLinux v2';
+  },
+
+  hash(args){
+    if(!args.length||args[0]==='-r')return '';
+    return args.map(a=>CMDS[a]?`${a}: /usr/bin/${a}`:`hash: ${a}: not found`).join('\n');
+  },
+
+  compgen(args){
+    if(args.includes('-c'))return Object.keys(CMDS).filter(k=>!k.startsWith('_')).sort().join('\n');
+    if(args.includes('-d'))return (VFS.readdir(ENV.cwd)||[]).filter(e=>e.t==='d').map(e=>e.name).join('\n');
+    if(args.includes('-f'))return (VFS.readdir(ENV.cwd)||[]).map(e=>e.name).join('\n');
+    return Object.keys(CMDS).filter(k=>!k.startsWith('_')).sort().join('\n');
+  },
+
+  declare(args){
+    if(!args.length||args[0]==='-p')return Object.entries(ENV.v).map(([k,v])=>`declare -- ${k}="${v}"`).join('\n');
+    for(const a of args.filter(x=>!x.startsWith('-'))){if(a.includes('=')){const[k,...r]=a.split('=');ENV.set(k,r.join('='));}}
+    return '';
+  },
+
+  pv(args){
+    return(input)=>{
+      if(!input)return '';
+      const bytes=new TextEncoder().encode(input).length;
+      TERM.writeln(`${bytes}B 0:00:00 [${bytes}B/s] [================================>] 100%`);
+      return input;
+    };
+  },
+
+  script(args){
+    const file=args.find(a=>!a.startsWith('-'))||'typescript';
+    VFS.writeFile(file,`Script started on ${new Date().toString()}\n`,ENV.cwd);
+    return `Script started, file is ${file}\n(stub: output capture is not supported in browser)`;
+  },
+
+  look(args){
+    const prefix=args.find(a=>!a.startsWith('-'))?.toLowerCase();
+    if(!prefix)return 'look: missing string';
+    const words='about above across address after again against age agent ago agree ahead air all allow almost alone along already also always among another answer any apart apply area around array ask back bash basic before between binary boot both bring build call case change class clean clear clone close code color command commit compile config connect continue copy count create data debug define delete deploy diff directory disk docker done echo edit else enable enter error event every exec exit export false fetch file find first flag font force format from function git grep group head help here home host http import info input install interface kernel kill know last left line link list load local login loop make match memory mkdir mode mount move name node null open option output package parse path pipe print process push python read remote remove return root run script search server shell show signal size sort source split start status stop sudo tail test text then thread true type unix user variable version view watch write'.split(' ');
+    return words.filter(w=>w.startsWith(prefix)).join('\n')||`(no words starting with '${prefix}')`;
+  },
+
+  pmap(args){
+    const pid=args[0]||'1000';
+    return `${pid}:   bash\n0000000000400000    512K r-x-- bash\n00007ffff7a00000   1824K r-x-- libc-2.31.so\n total  2336K`;
+  },
+
+  // ── System ──────────────────────────────────────────────────────
   clear(){TERM.clear();return '';},
-  echo: null, // defined above
   env(args){
     if(args[0]==='-i'){const[cmd,...rest]=args.slice(1);return cmd?Shell.exec(cmd+' '+rest.join(' ')):'';  }
     return Object.entries(ENV.v).sort().map(([k,v])=>`${k}=${v}`).join('\n');
@@ -557,51 +794,46 @@ window.CMDS = {
   type(args){return args.map(cmd=>{if(CMDS[cmd])return `${cmd} is a shell builtin`;return `${cmd}: not found`;}).join('\n');},
   whoami(){return ENV.v.USER;},
 
-  // ── User management ──────────────────────────────────────────────
-  async users() { return new Promise(r=>UserMgr.open(()=>r(''))); },
-  useradd(args) {
-    const n=args.find(a=>!a.startsWith('-')); if(!n)return'useradd: missing username';
+  // ── User management ─────────────────────────────────────────────
+  async users(){return new Promise(r=>UserMgr.open(()=>r('')));},
+  useradd(args){
+    const n=args.find(a=>!a.startsWith('-'));if(!n)return'useradd: missing username';
     if(UserDB.getUser(n))return`useradd: user '${n}' already exists`;
     const hi=args.indexOf('-d'),si=args.indexOf('-s'),ci=args.indexOf('-c');
     UserDB.addUser({name:n,home:hi!==-1?args[hi+1]:`/home/${n}`,shell:si!==-1?args[si+1]:'/bin/bash',gecos:ci!==-1?args[ci+1]:''});
     return '';
   },
-  userdel(args) {
-    const n=args.find(a=>!a.startsWith('-')); if(!n)return'userdel: missing username';
+  userdel(args){
+    const n=args.find(a=>!a.startsWith('-'));if(!n)return'userdel: missing username';
     if(!UserDB.getUser(n))return`userdel: user '${n}' does not exist`;
-    UserDB.removeUser(n, args.includes('-r')); return '';
+    UserDB.removeUser(n,args.includes('-r'));return '';
   },
-  usermod(args) {
-    const n=args[args.length-1]; const u=UserDB.getUser(n); if(!u)return`usermod: user '${n}' not found`;
-    const ch={}; const si=args.indexOf('-s'),di=args.indexOf('-d'),ci=args.indexOf('-c');
-    if(si!==-1)ch.shell=args[si+1]; if(di!==-1)ch.home=args[di+1]; if(ci!==-1)ch.gecos=args[ci+1];
-    if(args.includes('-L'))ch.locked=true; if(args.includes('-U'))ch.locked=false;
-    UserDB.modifyUser(n,ch); return '';
+  usermod(args){
+    const n=args[args.length-1];const u=UserDB.getUser(n);if(!u)return`usermod: user '${n}' not found`;
+    const ch={};const si=args.indexOf('-s'),di=args.indexOf('-d'),ci=args.indexOf('-c');
+    if(si!==-1)ch.shell=args[si+1];if(di!==-1)ch.home=args[di+1];if(ci!==-1)ch.gecos=args[ci+1];
+    if(args.includes('-L'))ch.locked=true;if(args.includes('-U'))ch.locked=false;
+    UserDB.modifyUser(n,ch);return '';
   },
-  groupadd(args) { const n=args.find(a=>!a.startsWith('-')); if(!n)return'groupadd: missing name'; UserDB.addGroup(n); return ''; },
-  groupdel(args) { const n=args.find(a=>!a.startsWith('-')); if(!n)return'groupdel: missing name'; UserDB.removeGroup(n); return ''; },
-  passwd(args) {
+  groupadd(args){const n=args.find(a=>!a.startsWith('-'));if(!n)return'groupadd: missing name';UserDB.addGroup(n);return '';},
+  groupdel(args){const n=args.find(a=>!a.startsWith('-'));if(!n)return'groupdel: missing name';UserDB.removeGroup(n);return '';},
+  passwd(args){
     const name=args[0]||ENV.v.USER;
-    const p1=prompt(`New password for ${name}:`); if(!p1)return'passwd: unchanged';
-    const p2=prompt('Retype:'); if(p1!==p2)return'passwd: passwords do not match';
+    const p1=prompt(`New password for ${name}:`);if(!p1)return'passwd: unchanged';
+    const p2=prompt('Retype:');if(p1!==p2)return'passwd: passwords do not match';
     UserDB.modifyUser(name,{pw:p1});
     VFS.appendFile('/var/log/auth.log',`${new Date().toISOString()} htmlinux passwd: password changed for ${name}\n`);
     return 'passwd: password updated successfully';
   },
-  who() { return `${ENV.v.USER}  pts/0   ${new Date().toLocaleString()}`; },
-  w()   { return `${ENV.v.USER.padEnd(8)} pts/0  - ${new Date().toTimeString().slice(0,5)} 0.00s bash`; },
-  id()  { const u=UserDB.getUser(ENV.v.USER); const grps=(u?.groups||[]).map((g,i)=>{ const gr=UserDB.getGroup(g); return gr?`${gr.gid}(${g})`:g; }).join(','); return `uid=${ENV.uid}(${ENV.v.USER}) gid=${ENV.gid}(${ENV.v.USER}) groups=${grps}`; },
+  who(){return `${ENV.v.USER}  pts/0   ${new Date().toLocaleString()}`;},
+  w(){return `${ENV.v.USER.padEnd(8)} pts/0  - ${new Date().toTimeString().slice(0,5)} 0.00s bash`;},
   id(){return `uid=${ENV.uid}(${ENV.v.USER}) gid=${ENV.gid}(${ENV.v.USER}) groups=${ENV.gid}(${ENV.v.USER}),27(sudo),4(adm)`;},
   hostname(args){if(args[0]){ENV.set('HOSTNAME',args[0]);VFS.writeFile('/etc/hostname',args[0]+'\n');return '';}return ENV.v.HOSTNAME;},
   uname(args){
     const a=args.includes('-a');
     if(a)return `Linux ${ENV.v.HOSTNAME} 6.1.0-htmlinux #1 SMP PREEMPT_DYNAMIC ${new Date().toDateString()} x86_64 GNU/Linux`;
-    if(args.includes('-r'))return '6.1.0-htmlinux';
-    if(args.includes('-n'))return ENV.v.HOSTNAME;
-    if(args.includes('-m'))return 'x86_64';
-    if(args.includes('-s'))return 'Linux';
-    if(args.includes('-v'))return '#1 SMP PREEMPT_DYNAMIC';
-    if(args.includes('-p'))return 'x86_64';
+    if(args.includes('-r'))return '6.1.0-htmlinux';if(args.includes('-n'))return ENV.v.HOSTNAME;
+    if(args.includes('-m'))return 'x86_64';if(args.includes('-s'))return 'Linux';
     return 'Linux';
   },
   date(args){
@@ -642,7 +874,7 @@ window.CMDS = {
   },
   nohup:(args)=>{if(!args.length)return 'nohup: missing command';TERM.writeln(`nohup: running '${args.join(' ')}' in background`);Shell.exec(args.join(' '));return '';},
 
-  // ── Disk ─────────────────────────────────────────────────────────
+  // ── Disk ────────────────────────────────────────────────────────
   df(args){
     const h=args.includes('-h');const used=VFS.usedSpace();const total=5*1024*1024;const free=total-used;
     const fmt=h?humanSize:(b)=>Math.round(b/1024)+'K';
@@ -651,14 +883,9 @@ window.CMDS = {
   du(args){
     let h=false;const ps=[];
     for(const a of args){if(a==='-h')h=true;else if(a==='-s'){}else ps.push(a);}
-    const target=ps[0]||'.';
-    const abs=VFS.norm(target,ENV.cwd);
-    const walk=(p)=>{
-      const entries=VFS.readdir(p)||[];
-      return entries.reduce((s,e)=>{if(e.t==='d')return s+walk(e.path);return s+VFS.size(e.path);},0);
-    };
-    const node=VFS.stat(target,ENV.cwd);
-    const sz=node?.t==='d'?walk(abs):VFS.size(target,ENV.cwd);
+    const target=ps[0]||'.';const abs=VFS.norm(target,ENV.cwd);
+    const walk=(p)=>{const entries=VFS.readdir(p)||[];return entries.reduce((s,e)=>{if(e.t==='d')return s+walk(e.path);return s+VFS.size(e.path);},0);};
+    const node=VFS.stat(target,ENV.cwd);const sz=node?.t==='d'?walk(abs):VFS.size(target,ENV.cwd);
     return h?`${humanSize(sz)}\t${target}`:`${Math.ceil(sz/1024)}\t${target}`;
   },
   free(args){
@@ -670,29 +897,27 @@ window.CMDS = {
     return `               total        used        free      shared  buff/cache   available\nMem:   ${String(fmt(total)).padStart(12)} ${String(fmt(used)).padStart(11)} ${String(fmt(free)).padStart(11)}          0 ${String(fmt(Math.round(total*0.1))).padStart(11)} ${String(fmt(free+Math.round(total*0.05))).padStart(11)}\nSwap:             0           0           0`;
   },
   lsblk(){return `NAME   MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS\nvda      252:0    0   20G  0 disk\n└─vda1   252:1    0   20G  0 part /\nlocalStorage 8:0  0    5M  0 disk (localStorage)\n└─ls1    8:1    0    5M  0 part /`;},
-  mount(args){
-    if(!args.length)return VFS.readFile('/proc/mounts');
-    return `mount: ${args.join(' ')}: simulated mount (not persistent)`;
-  },
+  mount(args){if(!args.length)return VFS.readFile('/proc/mounts');return `mount: ${args.join(' ')}: simulated mount`;},
   umount(args){return args.length?`umount: ${args[0]}: device busy`:'umount: missing path';},
 
-  // ── Network ───────────────────────────────────────────────────────
+  // ── Network ─────────────────────────────────────────────────────
   ping(args){
     const h=args.find(a=>!a.startsWith('-'))||'localhost';
     const n=args.includes('-c')?parseInt(args[args.indexOf('-c')+1])||4:4;
     const lines=[`PING ${h} (127.0.0.1) 56(84) bytes of data.`];
     for(let i=0;i<n;i++)lines.push(`64 bytes from ${h}: icmp_seq=${i+1} ttl=64 time=${(Math.random()*20+0.5).toFixed(3)} ms`);
-    lines.push(`\n--- ${h} ping statistics ---\n${n} packets transmitted, ${n} received, 0% packet loss, time ${n*1000}ms\nrtt min/avg/max/mdev = 0.5/10.0/20.0/5.0 ms`);
+    lines.push(`\n--- ${h} ping statistics ---\n${n} packets transmitted, ${n} received, 0% packet loss\nrtt min/avg/max/mdev = 0.5/10.0/20.0/5.0 ms`);
     return lines.join('\n');
   },
-  ifconfig(){return `lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536\n    inet 127.0.0.1  netmask 255.0.0.0\n    inet6 ::1  prefixlen 128\n    loop  txqueuelen 1000  (Local Loopback)\n    RX packets 0  bytes 0 (0.0 B)\n    TX packets 0  bytes 0 (0.0 B)\n\nbr0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500\n    inet ${navigator.onLine?'10.0.0.2':'0.0.0.0'}  netmask 255.255.255.0  broadcast 10.0.0.255\n    ether 52:54:00:12:34:56  txqueuelen 1000  (Ethernet)\n    RX packets 5678  bytes 567890 (555.0 KiB)\n    TX packets 2345  bytes 234567 (229.0 KiB)`;},
+  ifconfig(){return `lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536\n    inet 127.0.0.1  netmask 255.0.0.0\n    inet6 ::1  prefixlen 128\n\nbr0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500\n    inet ${navigator.onLine?'10.0.0.2':'0.0.0.0'}  netmask 255.255.255.0\n    ether 52:54:00:12:34:56  txqueuelen 1000  (Ethernet)`;},
   ip(args){if(!args[0]||args[0]==='addr'||args[0]==='a')return CMDS.ifconfig([]);if(args[0]==='route'||args[0]==='r')return 'default via 10.0.0.1 dev br0 proto dhcp\n10.0.0.0/24 dev br0 proto kernel scope link src 10.0.0.2';if(args[0]==='link'||args[0]==='l')return '1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536\n2: br0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500';return 'Usage: ip [addr|route|link]';},
-  ss(args){return `Netid  State   Recv-Q Send-Q Local Address:Port  Peer Address:Port  Process\ntcp    LISTEN  0      128    0.0.0.0:80         0.0.0.0:*          users:("nginx")\ntcp    ESTAB   0      0      10.0.0.2:52345     10.0.0.1:443       users:("browser")`;},
+  ss(args){return `Netid  State   Recv-Q Send-Q Local Address:Port  Peer Address:Port\ntcp    LISTEN  0      128    0.0.0.0:80         0.0.0.0:*\ntcp    ESTAB   0      0      10.0.0.2:52345     10.0.0.1:443`;},
   netstat:()=>CMDS.ss([]),
   nslookup(args){const h=args[0]||'localhost';return `Server:\t\t8.8.8.8\nAddress:\t8.8.8.8#53\n\nNon-authoritative answer:\nName:\t${h}\nAddress: 93.184.216.34`;},
-  dig(args){const h=args[0]||'localhost';return `; <<>> DiG 9.18.19 <<>> ${h}\n;; global options: +cmd\n;; Got answer:\n;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 12345\n;; flags: qr rd ra; QUERY: 1, ANSWER: 1\n\n;; ANSWER SECTION:\n${h}.\t\t300\tIN\tA\t93.184.216.34\n\n;; Query time: 23 msec\n;; SERVER: 8.8.8.8#53`;},
+  dig(args){const h=args[0]||'localhost';return `; <<>> DiG 9.18.19 <<>> ${h}\n;; ANSWER SECTION:\n${h}.\t\t300\tIN\tA\t93.184.216.34\n;; Query time: 23 msec\n;; SERVER: 8.8.8.8#53`;},
+  ssh(args){const host=args.find(a=>!a.startsWith('-'));if(!host)return 'usage: ssh [user@]hostname';return `ssh: connect to host ${host} port 22: Network access is not available in browser context.\nTip: use curl or wget for HTTP requests.`;},
 
-  // ── Crypto / Binary ──────────────────────────────────────────────
+  // ── Crypto / Binary ─────────────────────────────────────────────
   md5sum(args){
     const hash=s=>{let h=0;for(let i=0;i<s.length;i++)h=Math.imul(31,h)+s.charCodeAt(i)|0;return Math.abs(h).toString(16).padStart(32,'0');};
     return args.map(p=>{const c=VFS.readFile(p,ENV.cwd);if(c===null)return `md5sum: ${p}: No such file`;return `${hash(c)}  ${p}`;}).join('\n');
@@ -700,10 +925,6 @@ window.CMDS = {
   sha256sum(args){
     const hash=s=>{let h1=0xdeadbeef,h2=0x41c6ce57;for(let i=0;i<s.length;i++){h1=Math.imul(h1^s.charCodeAt(i),2654435761);h2=Math.imul(h2^s.charCodeAt(i),1597334677);}h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);return((4294967296*(2097151&h2))+(h1>>>0)).toString(16).padStart(64,'0');};
     return args.map(p=>{const c=VFS.readFile(p,ENV.cwd);if(c===null)return `sha256sum: ${p}: No such file`;return `${hash(c)}  ${p}`;}).join('\n');
-  },
-  sha1sum(args){
-    const hash=s=>{let h=0x67452301;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),0x9e3779b9)|0;return Math.abs(h).toString(16).padStart(40,'0');};
-    return args.map(p=>{const c=VFS.readFile(p,ENV.cwd);if(c===null)return `sha1sum: ${p}: No such file`;return `${hash(c)}  ${p}`;}).join('\n');
   },
   base64(args){
     let d=false;const ps=[];
@@ -714,8 +935,7 @@ window.CMDS = {
     let n=256;const ps=args.filter(a=>!a.startsWith('-'));
     if(!ps[0])return 'xxd: missing filename';
     const c=VFS.readFile(ps[0],ENV.cwd);if(c===null)return `xxd: ${ps[0]}: No such file`;
-    const bytes=new TextEncoder().encode(c);
-    const lines=[];
+    const bytes=new TextEncoder().encode(c);const lines=[];
     for(let i=0;i<Math.min(bytes.length,n);i+=16){
       const chunk=bytes.slice(i,i+16);
       const hex=[...chunk].map(b=>b.toString(16).padStart(2,'0'));
@@ -728,35 +948,26 @@ window.CMDS = {
   },
   hexdump:(args)=>CMDS.xxd(args),
   od(args){
-    const ps=args.filter(a=>!a.startsWith('-'));
-    if(!ps[0])return 'od: missing file';
+    const ps=args.filter(a=>!a.startsWith('-'));if(!ps[0])return 'od: missing file';
     const c=VFS.readFile(ps[0],ENV.cwd);if(c===null)return `od: ${ps[0]}: No such file`;
-    const bytes=new TextEncoder().encode(c);
-    const lines=[];
-    for(let i=0;i<Math.min(bytes.length,128);i+=16){
-      const chunk=bytes.slice(i,i+16);
-      const oct=[...chunk].map(b=>b.toString(8).padStart(3,'0')).join(' ');
-      lines.push(`${i.toString(8).padStart(7,'0')} ${oct}`);
-    }
-    lines.push(`${Math.min(bytes.length,128).toString(8).padStart(7,'0')}`);
-    return lines.join('\n');
+    const bytes=new TextEncoder().encode(c);const lines=[];
+    for(let i=0;i<Math.min(bytes.length,128);i+=16){const chunk=bytes.slice(i,i+16);const oct=[...chunk].map(b=>b.toString(8).padStart(3,'0')).join(' ');lines.push(`${i.toString(8).padStart(7,'0')} ${oct}`);}
+    lines.push(`${Math.min(bytes.length,128).toString(8).padStart(7,'0')}`);return lines.join('\n');
   },
   strings(args){if(!args[0])return 'strings: missing file';const c=VFS.readFile(args[0],ENV.cwd);if(c===null)return `strings: ${args[0]}: No such file`;return(c.match(/[\x20-\x7e]{4,}/g)||[]).join('\n');},
   cmp(args){
     if(args.length<2)return 'cmp: missing operand';
     const [a,b]=[VFS.readFile(args[0],ENV.cwd),VFS.readFile(args[1],ENV.cwd)];
-    if(a===null)return `cmp: ${args[0]}: No such file`;
-    if(b===null)return `cmp: ${args[1]}: No such file`;
+    if(a===null)return `cmp: ${args[0]}: No such file`;if(b===null)return `cmp: ${args[1]}: No such file`;
     if(a===b)return '';
     for(let i=0;i<Math.min(a.length,b.length);i++){if(a[i]!==b[i])return `${args[0]} ${args[1]} differ: byte ${i+1}, line ${a.slice(0,i).split('\n').length}`;}
     return `${args[0]} ${args[1]}: EOF on ${a.length<b.length?args[0]:args[1]}`;
   },
 
-  // ── Math ─────────────────────────────────────────────────────────
+  // ── Math ────────────────────────────────────────────────────────
   bc(args){
-    const code=args.join(' ');
-    if(!code)return 'bc -- arbitrary precision calculator. Usage: bc <expr>';
-    try {return String(Function('"use strict";return('+code+')')());} catch(e){return `(standard_in) 1: ${e.message}`;}
+    const code=args.join(' ');if(!code)return 'bc -- arbitrary precision calculator. Usage: bc <expr>';
+    try{return String(Function('"use strict";return('+code+')')());}catch(e){return `(standard_in) 1: ${e.message}`;}
   },
   calc:(args)=>CMDS.bc(args),
   seq(args){
@@ -764,39 +975,31 @@ window.CMDS = {
     if(args.length===1)last=parseInt(args[0]);
     else if(args.length===2){first=parseInt(args[0]);last=parseInt(args[1]);}
     else if(args.length===3){first=parseInt(args[0]);step=parseInt(args[1]);last=parseInt(args[2]);}
-    const r=[];for(let i=first;step>0?i<=last:i>=last;i+=step)r.push(i);
-    return r.join('\n');
+    const r=[];for(let i=first;step>0?i<=last:i>=last;i+=step)r.push(i);return r.join('\n');
   },
   factor(args){
     const factorize=(n)=>{const f=[];let d=2;while(d*d<=n){while(n%d===0){f.push(d);n=Math.floor(n/d);}d++;}if(n>1)f.push(n);return f;};
     return args.map(a=>{const n=parseInt(a);return isNaN(n)?`factor: '${a}' is not a positive integer`:`${n}: ${factorize(n).join(' ')}`;}).join('\n');
   },
   numfmt(args){
-    const n=parseFloat(args[0]);
-    if(isNaN(n))return 'numfmt: missing number';
-    if(args.includes('--to=si'))return humanSize(n);
-    if(args.includes('--to=iec'))return humanSize(n);
-    if(args.includes('--from=si')||args.includes('--from=iec'))return String(n);
-    return String(n);
+    const n=parseFloat(args[0]);if(isNaN(n))return 'numfmt: missing number';
+    if(args.includes('--to=si'))return humanSize(n);if(args.includes('--to=iec'))return humanSize(n);return String(n);
   },
   shuf(args){
     const n=args.indexOf('-n')!==-1?parseInt(args[args.indexOf('-n')+1]):Infinity;
-    const e=args.indexOf('-e')!==-1;
-    let lines2;
+    const e=args.indexOf('-e')!==-1;let lines2;
     if(e){lines2=args.filter(a=>a!=='-e'&&a!=='-n'&&!a.match(/^\d+$/));}
     else{const ps=args.filter(a=>!a.startsWith('-'));if(!ps.length)return 'shuf: no input';lines2=(VFS.readFile(ps[0],ENV.cwd)||'').split('\n');}
     for(let i=lines2.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[lines2[i],lines2[j]]=[lines2[j],lines2[i]];}
     return lines2.slice(0,n).join('\n');
   },
   repeat(args){
-    const n=parseInt(args[0])||3;const cmd=args.slice(1).join(' ');
-    if(!cmd)return 'repeat: missing command';
-    const results=[];
-    for(let i=0;i<n;i++)results.push(Shell.exec(cmd));
+    const n=parseInt(args[0])||3;const cmd=args.slice(1).join(' ');if(!cmd)return 'repeat: missing command';
+    const results=[];for(let i=0;i<n;i++)results.push(Shell.exec(cmd));
     return Promise.all(results).then(rs=>rs.join('\n'));
   },
 
-  // ── Archive ───────────────────────────────────────────────────────
+  // ── Archive ──────────────────────────────────────────────────────
   tar(args){
     const flags=args.filter(a=>a.startsWith('-')).join('');
     const paths=args.filter(a=>!a.startsWith('-'));
@@ -814,21 +1017,13 @@ window.CMDS = {
     return 'tar: usage: tar [-cvxtzf] [archive] [files...]';
   },
   gzip(args){
-    const ps=args.filter(a=>!a.startsWith('-'));
-    if(!ps.length)return 'gzip: missing file';
-    for(const p of ps){
-      const c=VFS.readFile(p,ENV.cwd);if(c===null)continue;
-      VFS.writeFile(p+'.gz',btoa(c),ENV.cwd);VFS.unlink(VFS.norm(p,ENV.cwd));
-    }
+    const ps=args.filter(a=>!a.startsWith('-'));if(!ps.length)return 'gzip: missing file';
+    for(const p of ps){const c=VFS.readFile(p,ENV.cwd);if(c===null)continue;VFS.writeFile(p+'.gz',btoa(c),ENV.cwd);VFS.unlink(VFS.norm(p,ENV.cwd));}
     return '';
   },
   gunzip(args){
-    const ps=args.filter(a=>!a.startsWith('-'));
-    if(!ps.length)return 'gunzip: missing file';
-    for(const p of ps){
-      const c=VFS.readFile(p,ENV.cwd);if(c===null)continue;
-      try{const d=atob(c);VFS.writeFile(p.replace(/\.gz$/,''),d,ENV.cwd);VFS.unlink(VFS.norm(p,ENV.cwd));}catch{TERM.writeln(`gunzip: ${p}: not in gzip format`);}
-    }
+    const ps=args.filter(a=>!a.startsWith('-'));if(!ps.length)return 'gunzip: missing file';
+    for(const p of ps){const c=VFS.readFile(p,ENV.cwd);if(c===null)continue;try{const d=atob(c);VFS.writeFile(p.replace(/\.gz$/,''),d,ENV.cwd);VFS.unlink(VFS.norm(p,ENV.cwd));}catch{TERM.writeln(`gunzip: ${p}: not in gzip format`);}}
     return '';
   },
   zip(args){
@@ -852,32 +1047,36 @@ window.CMDS = {
     return '';
   },
 
-  // ── Package manager ───────────────────────────────────────────────
+  // ── Package manager ──────────────────────────────────────────────
   async apt(args,shell){
     const sub=args[0];
-    if(!sub)return 'Usage: apt [update|install|remove|purge|list|search|show|upgrade] [package]';
+    if(!sub)return 'Usage: apt [update|install|remove|purge|list|search|show|upgrade|autoremove|depends|rdepends] [package]';
     if(sub==='update')return await PKG.update(shell||TERM);
-    if(sub==='install'&&args[1])return await PKG.install(args[1],shell||TERM);
+    if(sub==='install'&&args[1])return await PKG.install(args.slice(1),shell||TERM);
     if(sub==='remove'||sub==='purge')return PKG.remove(args[1]);
+    if(sub==='autoremove')return 'Reading package lists... Done\n0 packages removed.';
     if(sub==='list')return PKG.list(args[1]);
     if(sub==='search')return PKG.search(args[1]||'');
     if(sub==='show')return PKG.show(args[1]);
-    if(sub==='upgrade'){await PKG.update(shell||TERM);return 'All packages are up to date.';}
-    return `apt: unknown command '${sub}'`;
+    if(sub==='upgrade'){await PKG.update(shell||TERM);return PKG.upgradeAll(shell||TERM);}
+    if(sub==='depends')return PKG.depends(args[1]);
+    if(sub==='rdepends')return PKG.rdepends(args[1]);
+    return `apt: unknown command '${sub}'\nUsage: apt [update|install|remove|list|search|show|upgrade|depends]`;
   },
   dpkg(args){
     const sub=args[0];
-    if(sub==='-l')return PKG.list(args[1]);
-    if(sub==='--list')return PKG.list(args[1]);
+    if(sub==='-l'||sub==='--list')return PKG.list(args[1]);
+    if(sub==='-i')return `dpkg: use 'apt install' for package installation`;
+    if(sub==='--get-selections')return PKG.list();
     return 'dpkg: use apt for package management';
   },
 
-  // ── Editor ────────────────────────────────────────────────────────
+  // ── Editor ───────────────────────────────────────────────────────
   nano:async(args)=>{const f=args.find(a=>!a.startsWith('-'))||null;return new Promise(r=>Nano.open(f,()=>r('')));},
   vi:async(args)=>CMDS.nano(args),
   vim:async(args)=>CMDS.nano(args),
 
-  // ── Crontab ───────────────────────────────────────────────────────
+  // ── Crontab ──────────────────────────────────────────────────────
   crontab(args){
     if(args[0]==='-l')return VFS.readFile('/var/spool/cron/'+ENV.v.USER,ENV.cwd)||'# no crontab for '+ENV.v.USER;
     if(args[0]==='-e'){CMDS.nano(['/var/spool/cron/'+ENV.v.USER]);return '';}
@@ -885,7 +1084,7 @@ window.CMDS = {
     return 'crontab: usage: crontab [-l|-e|-r]';
   },
 
-  // ── User management ───────────────────────────────────────────────
+  // ── Sudo / Su ────────────────────────────────────────────────────
   su(args){
     const user=args[0]||'root';
     if(user==='root'){
@@ -903,74 +1102,40 @@ window.CMDS = {
     ENV.uid=1000;ENV.v.USER=old;
     return r;
   },
-  passwd(args){
-    const user=args[0]||ENV.v.USER;
-    const pw=prompt(`New password for ${user}:`,'');
-    if(!pw)return 'passwd: Password unchanged.';
-    const pw2=prompt(`Retype new password:`,'');
-    if(pw!==pw2)return 'passwd: Sorry, passwords do not match.';
-    return `passwd: password updated successfully`;
-  },
-  useradd(args){return `useradd: not supported in browser environment`;},
-  groupadd(args){return `groupadd: not supported in browser environment`;},
-  who(){return `${ENV.v.USER}  tty1         ${new Date().toLocaleString()}`;},
-  w(){return `${new Date().toTimeString().slice(0,5)} up ${Math.floor((Date.now()-BOOT_T)/60000)} min,  1 user,  load average: 0.00\nUSER     TTY      FROM             LOGIN@   IDLE JCPU   PCPU WHAT\n${ENV.v.USER.padEnd(8)} pts/0    -                ${new Date().toTimeString().slice(0,5)}   0.00s  0.00s  0.00s bash`;},
   last(){return `${ENV.v.USER}  pts/0        -                ${new Date().toDateString()} ${new Date().toTimeString().slice(0,5)}   still logged in\n\nwtmp begins ${new Date(BOOT_T).toDateString()}`;},
   tty(){return '/dev/pts/0';},
-  stty(args){if(args.includes('size'))return '50 220';return 'speed 38400 baud; rows 50; columns 220;\n-parenb -parodd -cmspar cs8 -hupcl -cstopb cread -clocal -crtscts\n-ignbrk -brkint -ignpar -parmrk -inpck -istrip -inlcr -igncr icrnl ixon -ixoff -iuclc -ixany -imaxbel -iutf8\nopost -olcuc -ocrnl onlcr -onocr -onlret -ofill -ofdel nl0 cr0 tab0 bs0 vt0 ff0\nisig icanon iexten echo echoe echok -echonl -noflsh -xcase -tostop -echoprt echoctl echoke -flusho -extproc';},
+  stty(args){if(args.includes('size'))return '50 220';return 'speed 38400 baud; rows 50; columns 220;';},
 
-  // ── Logging ───────────────────────────────────────────────────────
-  dmesg(args){
-    const t=(s)=>`[${((Date.now()-BOOT_T)/1000+s).toFixed(6)}]`;
-    return VFS.readFile('/var/log/kern.log')||`[    0.000000] Linux version 6.1.0-htmlinux\n[    0.100000] HTMLinux: VFS initialized\n[    0.500000] bash: started (PID 1000)`;
-  },
+  // ── Logging ──────────────────────────────────────────────────────
+  dmesg(args){return VFS.readFile('/var/log/kern.log')||`[    0.000000] Linux version 6.1.0-htmlinux\n[    0.100000] HTMLinux v2: VFS initialized\n[    0.500000] bash: started (PID 1000)`;},
   journalctl(args){
     const n=args.includes('-n')?parseInt(args[args.indexOf('-n')+1])||20:50;
-    const syslog=VFS.readFile('/var/log/syslog')||'';
-    const kern=VFS.readFile('/var/log/kern.log')||'';
-    const auth=VFS.readFile('/var/log/auth.log')||'';
+    const syslog=VFS.readFile('/var/log/syslog')||'';const kern=VFS.readFile('/var/log/kern.log')||'';const auth=VFS.readFile('/var/log/auth.log')||'';
     const lines=(syslog+kern+auth).split('\n').filter(Boolean).slice(-n);
     if(!lines.length)return `-- No entries --`;
     return `-- Logs begin at ${new Date(BOOT_T).toISOString()} --\n`+lines.join('\n');
   },
-  logger(args){
-    const msg=args.join(' ');
-    VFS.appendFile('/var/log/syslog',`${new Date().toISOString()} ${ENV.v.HOSTNAME} ${ENV.v.USER}: ${msg}\n`);
-    return '';
-  },
+  logger(args){VFS.appendFile('/var/log/syslog',`${new Date().toISOString()} ${ENV.v.HOSTNAME} ${ENV.v.USER}: ${args.join(' ')}\n`);return '';},
   sysctl(args){
-    const show={
-      'kernel.hostname':ENV.v.HOSTNAME,
-      'kernel.ostype':'Linux',
-      'kernel.osrelease':'6.1.0-htmlinux',
-      'kernel.version':'#1 SMP PREEMPT_DYNAMIC',
-      'vm.swappiness':'60',
-      'net.ipv4.ip_forward':'0',
-    };
+    const show={'kernel.hostname':ENV.v.HOSTNAME,'kernel.ostype':'Linux','kernel.osrelease':'6.1.0-htmlinux','vm.swappiness':'60','net.ipv4.ip_forward':'0'};
     if(args[0]==='-a')return Object.entries(show).map(([k,v])=>`${k} = ${v}`).join('\n');
-    if(args[0]&&!args[0].startsWith('-')){
-      if(args[0].includes('='))[...show[args[0].split('=')[0]]||''];
-      return show[args[0]]!==undefined?`${args[0]} = ${show[args[0]]}`:'';}
-    return 'sysctl: usage: sysctl [-a] [variable[=value]]';
+    if(args[0]&&!args[0].startsWith('-'))return show[args[0]]!==undefined?`${args[0]} = ${show[args[0]]}`:'';
+    return 'sysctl: usage: sysctl [-a] [variable]';
   },
 
-  // ── Misc ──────────────────────────────────────────────────────────
+  // ── Misc ─────────────────────────────────────────────────────────
   history(args){if(args[0]==='-c'){Hist.clear();return '';}return Hist.all().map((e,i)=>`${String(i+1).padStart(5)}  ${e}`).join('\n');},
   alias(args){if(!args.length)return Object.entries(Shell.aliases).map(([k,v])=>`alias ${k}='${v}'`).join('\n');for(const a of args){if(a.includes('=')){const[k,...r]=a.split('=');Shell.aliases[k]=r.join('=').replace(/^['"]|['"]$/g,'');}}return '';},
   unalias(args){for(const a of args)delete Shell.aliases[a];return '';},
   source(args){const f=args[0];if(!f)return 'source: filename argument required';const c=VFS.readFile(f,ENV.cwd);if(!c)return `source: ${f}: No such file`;for(const l of c.split('\n').filter(l=>l.trim()&&!l.trim().startsWith('#')))Shell.exec(l);return '';},
   yes(args){return Array(20).fill(args[0]||'y').join('\n');},
-  true:()=>'',
-  false:()=>'',
+  true:()=>'',false:()=>'',
   test(args){
     if(args[0]==='-f')return VFS.stat(args[1],ENV.cwd)?.t==='f'?'':'1';
     if(args[0]==='-d')return VFS.stat(args[1],ENV.cwd)?.t==='d'?'':'1';
     if(args[0]==='-e')return VFS.exists(args[1],ENV.cwd)?'':'1';
-    if(args[0]==='-z')return !args[1]?'':'1';
-    if(args[0]==='-n')return args[1]?'':'1';
-    if(args[0]==='-r')return VFS.exists(args[1],ENV.cwd)?'':'1';
-    if(args[1]==='=')return args[0]===args[2]?'':'1';
-    if(args[1]==='!=')return args[0]!==args[2]?'':'1';
+    if(args[0]==='-z')return !args[1]?'':'1';if(args[0]==='-n')return args[1]?'':'1';
+    if(args[1]==='=')return args[0]===args[2]?'':'1';if(args[1]==='!=')return args[0]!==args[2]?'':'1';
     if(args[1]==='-lt')return parseInt(args[0])<parseInt(args[2])?'':'1';
     if(args[1]==='-gt')return parseInt(args[0])>parseInt(args[2])?'':'1';
     if(args[1]==='-eq')return parseInt(args[0])===parseInt(args[2])?'':'1';
@@ -979,17 +1144,18 @@ window.CMDS = {
   expr(args){try{return String(Function('"use strict";return('+args.join(' ')+')')());}catch{return '0';}},
   read(args){const v=args[args.indexOf('-p')!==-1?2:0]||'REPLY';ENV.set(v,'');return '';},
 
-  // ── Fun ───────────────────────────────────────────────────────────
+  // ── Fun ──────────────────────────────────────────────────────────
   cowsay(args){const m=args.join(' ')||'Moo!';const b=m.length+2;return ` ${'_'.repeat(b)}\n< ${m} >\n ${'‾'.repeat(b)}\n        \\   ^__^\n         \\  (oo)\\_______\n            (__)\\       )\\/\\\n                ||----w |\n                ||     ||`;},
-  fortune(){const q=['The art of programming is the art of organizing complexity. — Dijkstra','Any fool can write code that a computer can understand. — Fowler','Talk is cheap. Show me the code. — Torvalds','In theory there is no difference between theory and practice. In practice there is. — Yogi Berra','The most dangerous phrase in the language is "We have always done it this way." — Grace Hopper','Walking on water and developing software from a specification are easy if both are frozen. — Edward Berard','sudo make me a sandwich. — xkcd','There are 10 types of people: those who understand binary, and those who do not.','The best code is no code at all. — Jeff Atwood'];return q[Math.floor(Math.random()*q.length)];},
+  fortune(){const q=['The art of programming is the art of organizing complexity. — Dijkstra','Any fool can write code that a computer can understand. — Fowler','Talk is cheap. Show me the code. — Torvalds','In theory there is no difference between theory and practice. In practice there is. — Yogi Berra','The most dangerous phrase in the language is "We have always done it this way." — Grace Hopper','sudo make me a sandwich. — xkcd','There are 10 types of people: those who understand binary, and those who do not.','The best code is no code at all. — Jeff Atwood','It works on my machine. — Every Developer'];return q[Math.floor(Math.random()*q.length)];},
   cowthink(args){const m=args.join(' ')||'Hmm...';const b=m.length+2;return ` ${'_'.repeat(b)}\n( ${m} )\n ${'‾'.repeat(b)}\n        o   ^__^\n         o  (oo)\\_______\n            (__)\\       )\\/\\\n                ||----w |\n                ||     ||`;},
-  sl(){return '      ====        ________                ___________ \n  _D _|  |_______/        \\__I_I_____===__|_________|\n   |(_)---  |   H\\________/ |   |        =|___ ___|  \n   /     |  |   H  |  |     |   |         ||_| |_||  \n  |      |  |   H  |__--------------------| [___] |\n  | ________|___H__/__|_____/[][]~\\_______|       |\n  |/ |   |-----------I_____I [][] []  D   |=======|\n__/ =| o |=-~~\\  /~~\\  /~~\\  /~~\\ ____Y___________|__\n |/-=|___|=O=====O=====O=====O   |_____/~\\___/\n  \\_/      \\__/  \\__/  \\__/  \\__/      \\_/';},
+  sl(){return '      ====        ________                ___________ \n  _D _|  |_______/        \\__I_I_____===__|_________|\n   |(_)---  |   H\\________/ |   |        =|___ ___| \n   /     |  |   H  |  |     |   |         ||_| |_|| \n  |      |  |   H  |__--------------------| [___] |\n  | ________|___H__/__|_____/[][]~\\_______|       |\n  |/ |   |-----------I_____I [][] []  D   |=======|\n__/ =| o |=-~~\\  /~~\\  /~~\\  /~~\\ ____Y___________|__\n |/-=|___|=O=====O=====O=====O   |_____/~\\___/\n  \\_/      \\__/  \\__/  \\__/  \\__/      \\_/';},
   banner(args){const t=args.join(' ')||'Hello!';return `\x1b[1m+${'─'.repeat(t.length+2)}+\n| ${t} |\n+${'─'.repeat(t.length+2)}+\x1b[0m`;},
   matrix(){const c='ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍ012345678901234567890'.split('');const r=[];for(let i=0;i<12;i++)r.push(Array.from({length:60},()=>c[Math.floor(Math.random()*c.length)]).join(''));return r.join('\n');},
   lolcat(args){const t=args.join(' ')||'Hello, World!';return [...t].map((c,i)=>`\x1b[${31+(i%6)}m${c}\x1b[0m`).join('');},
-  figlet(args){const t=args.join(' ')||'Hello';const art={'H':'|_| |','e':' _\\  ','l':'| |  ','o':' _ )','!':'! ','W':'W W','r':' /',',':' ,',' ':' '};return `  ___ \n |${t.split('').map(c=>art[c]||c).join('')}|\n  ‾‾‾`;},
+  figlet(args){const t=args.join(' ')||'Hello';return `  ___ \n |${t}|\n  ‾‾‾`;},
+  toilet(args){const t=args.filter(a=>!a.startsWith('-')).join(' ')||'HTMLinux';return `\x1b[1;36m██╗  ██╗████████╗███╗   ███╗██╗     ██╗███╗   ██╗██╗   ██╗██╗  ██╗\x1b[0m\n${t}`;},
 
-  // ── JS runtime ────────────────────────────────────────────────────
+  // ── JS runtime ───────────────────────────────────────────────────
   js(args){
     if(!args.length)return 'Usage: js [-e "code"] [file.js]';
     if(args[0]==='-e'&&args[1])return runJS(args[1]);
@@ -997,58 +1163,61 @@ window.CMDS = {
     return runJS(c);
   },
 
-  // ── Help ──────────────────────────────────────────────────────────
+  // ── Help ─────────────────────────────────────────────────────────
   help(){
-    return `HTMLinux 1.0 — Built-in Commands
+    return `\x1b[1;36mHTMLinux v2.0\x1b[0m — Built-in Commands
 ${'─'.repeat(60)}
-Navigation:   cd pwd ls
-Files:        cat head tail tac rev nl fold touch cp mv rm
+\x1b[1mNavigation:\x1b[0m   cd pwd ls tree
+\x1b[1mFiles:\x1b[0m        cat head tail tac rev nl fold touch cp mv rm
               mkdir rmdir ln readlink stat file realpath
-              basename dirname mktemp
-Text:         echo printf grep sed awk sort uniq wc tr cut
+              basename dirname mktemp install
+\x1b[1mText:\x1b[0m         echo printf grep sed awk sort uniq wc tr cut
               paste join comm diff cmp strings xxd od hexdump
-Search:       find locate grep
-Compression:  tar gzip gunzip zip unzip split
-System:       env export set unset printenv uname date uptime
+              tee xargs pv look
+\x1b[1mSearch:\x1b[0m       find locate grep
+\x1b[1mCompression:\x1b[0m  tar gzip gunzip zip unzip split
+\x1b[1mSystem:\x1b[0m       env export set unset printenv uname date uptime
               ps kill free df du lsblk mount sysctl dmesg
-              journalctl logger who w last tty stty
-Network:      ping ifconfig ip ss netstat nslookup dig
-Crypto:       md5sum sha1sum sha256sum base64
-Math:         bc calc seq factor numfmt shuf expr
-User:         whoami id su sudo passwd hostname
-Cron:         crontab (edit, list, remove)
-Packages:     apt [update|install|remove|list|search|show]
-              Available: python, node, htop, neofetch, git,
-                         curl, wget, vim, lua
-Editor:       nano / vi / vim
-Fun:          cowsay cowthink fortune sl banner matrix lolcat
-Misc:         history alias source watch timeout repeat nohup
-              sleep yes true false test time js download upload
-              clear reset_fs reboot poweroff
+              journalctl logger who w last tty stty nproc getconf
+              vmstat iostat mpstat time watch sleep timeout
+\x1b[1mNetwork:\x1b[0m      ping ifconfig ip ss netstat nslookup dig ssh
+              traceroute mtr host whois nc nmap iptables route
+\x1b[1mCrypto:\x1b[0m       md5sum sha1sum sha256sum sha512sum base64 base32
+              xxd openssl gpg
+\x1b[1mMath:\x1b[0m         bc calc seq factor numfmt shuf expr units cal
+\x1b[1mUser:\x1b[0m         whoami id su sudo passwd hostname useradd userdel
+\x1b[1mCron:\x1b[0m         crontab -e/-l/-r
+\x1b[1mPackages:\x1b[0m     apt [update|install|remove|list|search|show|upgrade]
+              apt depends  apt rdepends
+              Available: python node htop neofetch git curl wget
+                         vim lua jq ripgrep fzf httpie tree
+\x1b[1mEditor:\x1b[0m       nano / vi / vim
+\x1b[1mFun:\x1b[0m          cowsay cowthink fortune sl banner matrix lolcat toilet
+\x1b[1mDiag:\x1b[0m         strace lsattr apropos whatis info compgen look pmap
+\x1b[1mMisc:\x1b[0m         history alias source repeat nohup script declare
+              clear reset_fs reboot poweroff exit
+\x1b[1mBrowser:\x1b[0m      download upload js
 
-Shell:        VAR=val, VAR=val cmd, cmd > file, cmd >> file
-              cmd1 | cmd2, cmd1 && cmd2, cmd1 || cmd2
-              if/then/fi, for/do/done, while/do/done, functions
-              $VAR expansion, $(cmd) subshell, "quoted strings"
-
-Type \x1b[1mman <cmd>\x1b[0m for more info. Tab to autocomplete.`;
+Type \x1b[1mman <cmd>\x1b[0m for details. Tab to autocomplete.`;
   },
   man(args){
     const p={
-      ls:'ls [options] [path]\n  -l  long format with permissions\n  -a  show hidden files (dotfiles)\n  -h  human-readable sizes\n  -t  sort by modification time\n  -S  sort by size\n  -r  reverse sort order\n  -R  recursive listing\n  -F  append indicators (/ @ *)',
-      grep:'grep [options] pattern [files]\n  -i  case insensitive\n  -v  invert match\n  -n  show line numbers\n  -r  recursive directory search\n  -c  count matches only\n  -l  list matching files only\n  -o  only matching part\n  -F  fixed string (no regex)\n  -E  extended regex\n  -w  whole word match',
-      find:'find [path] [options]\n  -name pattern   match filename glob\n  -type f|d|l     file type\n  -maxdepth n     limit depth\n  -exec cmd {}    execute command',
-      nano:'nano [file]\n  ^O  Write (save)\n  ^X  Exit\n  ^K  Cut line to buffer\n  ^U  Paste buffer\n  ^W  Search forward\n  \\   Replace\n  ^A  Beginning of line\n  ^E  End of line\n  ^R  Insert file\n  ^C  Show position',
-      apt:'apt [command] [package]\n  update          Refresh package list\n  install <pkg>   Install package\n  remove <pkg>    Remove package\n  list [filter]   List packages\n  search <query>  Search packages\n  show <pkg>      Show package details\n  upgrade         Upgrade all packages\n\nAvailable packages: python, node, htop, neofetch, git, curl, wget, vim, lua',
-      bash:'bash — Bourne Again SHell\n  Builtins: cd, pwd, echo, export, unset, source, alias\n  Control:  if/then/elif/else/fi, for/in/do/done,\n            while/do/done, case/in/esac\n  Operators: &&, ||, |, >, >>, <, 2>\n  Variables: $VAR, ${VAR}, $?, $!, $$, $#, $@\n  Quoting: "double" or \'single\' quotes\n  Subshell: $(cmd) or `cmd`',
+      ls:'ls [options] [path]\n  -l  long format with permissions\n  -a  show hidden files\n  -h  human-readable sizes\n  -t  sort by modification time\n  -S  sort by size   -r  reverse   -R  recursive   -F  append indicators',
+      grep:'grep [options] pattern [files]\n  -i  case insensitive  -v  invert match  -n  show line numbers\n  -r  recursive  -c  count  -l  list files  -o  only matching  -w  whole word',
+      find:'find [path] [options]\n  -name pattern   match filename (glob)\n  -type f|d|l     file type filter\n  -maxdepth n     limit recursion depth',
+      nano:'nano [file]\n  ^O  Write (save)  ^X  Exit  ^K  Cut line  ^U  Paste\n  ^W  Search  ^R  Insert file  ^C  Show cursor position',
+      apt:'apt [command] [package]\n  update          Refresh package list\n  install <pkg>   Install (multiple: apt install git curl)\n  remove <pkg>    Remove package\n  list [filter]   List packages\n  search <query>  Search packages\n  show <pkg>      Show package info\n  upgrade         Upgrade all installed packages\n  depends <pkg>   Show dependencies\n  rdepends <pkg>  Show reverse dependencies\n\nAvailable packages:\n  python, node, htop, neofetch, git, curl, wget, vim, lua,\n  jq, ripgrep, fzf, httpie, tree',
+      bash:'Bash built-ins & shell features:\n  Variables: VAR=val, $VAR, ${VAR}, $?, $$, $#, $@\n  Subshell:  $(cmd) or `cmd`\n  Control:   if/then/elif/else/fi\n             for VAR in list; do ... done\n             while cond; do ... done\n  Redirect:  > >> < 2> 2>&1\n  Pipe:      cmd1 | cmd2 | cmd3\n  Logic:     cmd1 && cmd2  cmd1 || cmd2\n  Functions: fname() { commands; }',
+      units:'units <value> <from> <to>\n  Temperature: c/f\n  Distance:    km/miles, in/cm, ft/m\n  Weight:      kg/lbs, g/oz\n  Volume:      l/gal\n  Data:        gb/mb, mb/kb, kb/bytes\n  Speed:       mph/kph\n  Angle:       deg/rad\n\nExample: units 100 km miles',
+      git:'git <command>\n  init            Create new repository\n  clone <url>     Clone a GitHub repo (fetches real files)\n  status          Show working tree status\n  add .           Stage all files\n  commit -m "msg" Create a commit\n  log [--oneline] Show commit history\n  branch [-d]     List or delete branches\n  checkout [-b]   Switch or create branch\n  stash [pop]     Stash or restore changes\n  remote -v       Show remotes\n  diff            Show staged changes\n  push / pull     Simulate push/pull',
     };
     const cmd=args[0];
-    if(!cmd)return 'What manual page do you want?\nFor example: man ls';
+    if(!cmd)return 'What manual page do you want?\nExample: man ls';
     if(p[cmd])return `MANUAL PAGE: ${cmd.toUpperCase()}\n\nSYNOPSIS\n  ${p[cmd]}`;
-    return `No manual entry for ${cmd}\nTry: man [ls|grep|find|nano|apt|bash]`;
+    return `No manual entry for ${cmd}\nTry: man [ls|grep|find|nano|apt|bash|git|units]`;
   },
 
-  // ── File I/O (browser) ────────────────────────────────────────────
+  // ── File I/O (browser) ───────────────────────────────────────────
   download(args){
     const f=args[0];if(!f)return 'download: specify a filename';
     const c=VFS.readFile(f,ENV.cwd);if(c===null)return `download: ${f}: No such file`;
@@ -1066,33 +1235,33 @@ Type \x1b[1mman <cmd>\x1b[0m for more info. Tab to autocomplete.`;
         VFS.writeFile(VFS.norm(file.name,ENV.cwd),txt);
         TERM.writeln(`Received: ${file.name} (${humanSize(txt.length)})`);
       }
-      inp.value='';TERM.unlock();TERM.updatePrompt();
+      inp.value='';TERM.unlock();TERM.updatePrompt();TERM.focus();
     };
     inp.click();TERM.lock();return '';
   },
   reset_fs(){if(confirm('Reset filesystem to defaults? All data will be lost.')){VFS.reset();return 'Filesystem reset to defaults.';}return 'Cancelled.';},
   reboot(){TERM.writeln('\x1b[1mSystem is going down for reboot NOW!\x1b[0m');setTimeout(()=>location.reload(),1500);return '';},
-  poweroff(){TERM.writeln('\x1b[1mSystem is shutting down...\x1b[0m');setTimeout(()=>{document.body.style.background='#000';document.body.innerHTML='<div style="color:#333;font-family:monospace;padding:10px">[ 0.000000] System halted.</div>';},1500);return '';},
+  poweroff(){TERM.writeln('\x1b[1mSystem is shutting down...\x1b[0m');setTimeout(()=>{document.body.style.background='#000';document.body.innerHTML='<div style="color:#1a1a1a;font-family:monospace;padding:10px">[ 0.000000] System halted.</div>';},1500);return '';},
   exit(args){TERM.writeln(`logout`);return '';},
   logout:()=>CMDS.exit([]),
 
-  // ── JSON processor (basic jq) ─────────────────────────────────────
+  // ── JSON processor ───────────────────────────────────────────────
   jq(args){
     let filter='.';const ps=[];
     for(const a of args){if(!a.startsWith('-')&&!VFS.exists(a,ENV.cwd)&&a!=='.')filter=a;else if(!a.startsWith('-'))ps.push(a);}
     if(!ps.length)return 'jq: no input file';
     return ps.map(p=>{
       const c=VFS.readFile(p,ENV.cwd);if(!c)return `jq: ${p}: No such file`;
-      try {
+      try{
         const data=JSON.parse(c);
         if(filter==='.')return JSON.stringify(data,null,2);
         if(filter.startsWith('.'))return JSON.stringify(filter.slice(1).split('.').reduce((o,k)=>o?.[k],data),null,2);
         return JSON.stringify(data,null,2);
-      } catch(e){return `jq: parse error: ${e.message}`;}
+      }catch(e){return `jq: parse error: ${e.message}`;}
     }).join('\n');
   },
 
-  // ── Autocomplete helper ───────────────────────────────────────────
+  // ── Autocomplete helper ──────────────────────────────────────────
   _completions(partial) {
     const parts=partial.split(' ');
     if(parts.length<=1){
@@ -1109,32 +1278,6 @@ Type \x1b[1mman <cmd>\x1b[0m for more info. Tab to autocomplete.`;
   },
 };
 
-// Fix echo overwrite
-CMDS.echo = function(args){
-  let n=false,e2=false;const ps=[];
-  for(const a of args){if(a==='-n')n=true;else if(a==='-e')e2=true;else ps.push(a);}
-  let out=ps.map(p=>ENV.expand(p)).join(' ');
-  if(e2)out=out.replace(/\\n/g,'\n').replace(/\\t/g,'\t').replace(/\\033\[/g,'\x1b[').replace(/\\e\[/g,'\x1b[').replace(/\\\\/g,'\\');
-  return out+(n?'':'');
-};
-
-// Fix sort overwrite
-CMDS.sort = function(args){
-  let r=false,u=false,n2=false,f=false;let field=0;const ps=[];
-  for(let i=0;i<args.length;i++){
-    if(args[i]==='-r')r=true;else if(args[i]==='-u')u=true;
-    else if(args[i]==='-n')n2=true;else if(args[i]==='-f')f=true;
-    else if((args[i]==='-k')&&args[i+1])field=parseInt(args[++i])-1;
-    else ps.push(args[i]);
-  }
-  if(!ps.length)return 'sort: no input';
-  let lines=ps.map(p=>VFS.readFile(p,ENV.cwd)||'').join('\n').split('\n');
-  if(u)lines=[...new Set(lines)];
-  lines.sort((a,b)=>{let av=field?a.split(/\s+/)[field]||a:a;let bv=field?b.split(/\s+/)[field]||b:b;if(f){av=av.toLowerCase();bv=bv.toLowerCase();}return n2?parseFloat(av)-parseFloat(bv):av.localeCompare(bv);});
-  if(r)lines.reverse();
-  return lines.join('\n');
-};
-
 // Aliases
 CMDS['['] = CMDS.test;
 CMDS['ll'] = (a)=>CMDS.ls(['-la',...a]);
@@ -1142,13 +1285,9 @@ CMDS['la'] = (a)=>CMDS.ls(['-A',...a]);
 CMDS['l']  = (a)=>CMDS.ls(['-CF',...a]);
 CMDS['cls'] = ()=>{ CMDS.clear(); return ''; };
 CMDS['.']  = CMDS.source;
+CMDS['typeset'] = CMDS.declare;
+CMDS['nc'] = CMDS.nc;
+CMDS['tracepath'] = CMDS.traceroute;
 
-// ================================================================
-// SHELL — command interpreter with scripting support
-// ================================================================
-
-// ================================================================
-// PACKAGE MANAGER
-// ================================================================
 // scope aliases
 var CMDS = window.CMDS;
