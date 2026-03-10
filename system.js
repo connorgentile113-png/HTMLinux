@@ -138,25 +138,44 @@ window.PKG = (() => {
 
             TERM.writeln("Cloning into '" + destDir + "'...");
 
-            // Try GitHub API to get real file list
+            // Get file list via jsDelivr API (no CORS issues), then GitHub API, then fallback
             let filesToFetch = [];
+
             try {
-              const apiUrl = `https://api.github.com/repos/\${owner}/\${repo}/git/trees/HEAD?recursive=1`;
-              const apiResp = await fetch(apiUrl);
-              if (apiResp.ok) {
-                const data = await apiResp.json();
-                filesToFetch = (data.tree || [])
-                  .filter(f => f.type === 'blob' && f.size < 500000)
-                  .map(f => f.path);
-                TERM.writeln(`remote: Enumerating objects: \${filesToFetch.length}, done.`);
+              const jsdResp = await fetch(`https://data.jsdelivr.com/v1/packages/gh/${owner}/${repo}`);
+              if (jsdResp.ok) {
+                const data = await jsdResp.json();
+                const flatten = (files, prefix='') => {
+                  for (const f of (files||[])) {
+                    if (f.type === 'file') filesToFetch.push(prefix + f.name);
+                    else if (f.type === 'directory') flatten(f.files, prefix + f.name + '/');
+                  }
+                };
+                flatten(data.files);
               }
             } catch(e) {}
 
-            // Fallback to common filenames if API failed
             if (!filesToFetch.length) {
-              filesToFetch = ['README.md','readme.md','package.json','index.js',
-                'index.html','index.ts','main.js','main.py','app.js','app.py',
-                'LICENSE','LICENSE.md','.gitignore','requirements.txt','Makefile'];
+              try {
+                const ghResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`);
+                if (ghResp.ok) {
+                  const data = await ghResp.json();
+                  filesToFetch = (data.tree||[]).filter(f=>f.type==='blob'&&f.size<500000).map(f=>f.path);
+                }
+              } catch(e) {}
+            }
+
+            if (filesToFetch.length) {
+              TERM.writeln(`remote: Enumerating objects: ${filesToFetch.length}, done.`);
+            } else {
+              // Last resort: try common filenames
+              filesToFetch = [
+                'README.md','readme.md','LICENSE','LICENSE.md','.gitignore',
+                'package.json','index.js','index.ts','index.html','index.css',
+                'main.js','main.ts','main.py','main.c','app.js','app.py','app.html',
+                'src/index.js','src/main.js','requirements.txt','Makefile',
+                'Dockerfile','tsconfig.json','vite.config.js','webpack.config.js',
+              ];
             }
 
             VFS.mkdir(destAbs);
