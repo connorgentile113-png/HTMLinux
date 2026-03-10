@@ -640,3 +640,8 @@ window.UserMgr = (() => {
     isActive:()=>ov?.style.display==='flex',
   };
 })();
+// scope aliases
+var PKG = window.PKG;
+var CRON = window.CRON;
+var UserDB = window.UserDB;
+var UserMgr = window.UserMgr;
