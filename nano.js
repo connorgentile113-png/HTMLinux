@@ -129,3 +129,5 @@ window.Nano = (() => {
     isActive:()=>ov.classList.contains('on'),
   };
 })();
+// scope aliases
+var Nano = window.Nano;
