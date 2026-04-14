@@ -28,10 +28,10 @@ window.Shell = {
     // Expand variables and command substitutions
     args = await Promise.all(args.map(async a => {
       // $(cmd) substitution
-      a = a.replace(/\$\(([^)]+)\)/g, '');
-      const matches = [...(a.matchAll(/\$\(([^)]+)\)/g) || [])];
+      let arg = a.replace(/\$\(([^)]+)\)/g, '');
+      const matches = [...(arg.matchAll(/\$\(([^)]+)\)/g) || [])];
       // Simple expansion
-      return ENV.expand(a);
+      return ENV.expand(arg);
     }));
 
     if (CMDS[cmd]) {
