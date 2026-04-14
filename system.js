@@ -1,8 +1,9 @@
 window.PKG = (() => {
   const KEY='hl_pkgs';
   const META_KEY='hl_pkgs_meta';
+  const HIST_KEY='hl_pkg_hist';
   let inst={};
-  let meta={auto:{},hold:{},cache:{}};
+  let meta={auto:{},hold:{},cache:{},files:{},history:[]};
 
   const REGISTRY = {
     python: {
@@ -866,13 +867,44 @@ window.PKG = (() => {
     return added;
   }
 
+  function saveMeta() { localStorage.setItem(META_KEY,JSON.stringify(meta)); }
+  function saveInst() { localStorage.setItem(KEY,JSON.stringify(inst)); }
+  function logPkgHistory(action, packages=[]) {
+    const row = { ts: Date.now(), action, packages:[...packages] };
+    meta.history = [...(meta.history||[]), row].slice(-200);
+    try { localStorage.setItem(HIST_KEY,JSON.stringify(meta.history)); } catch {}
+    saveMeta();
+    const line = `${new Date(row.ts).toISOString()} ${action}: ${packages.join(' ')}`;
+    VFS.appendFile('/var/log/apt/history.log', line + '\n');
+  }
+  function generatePackageFiles(name) {
+    return [
+      `/usr/bin/${name}`,
+      `/usr/share/doc/${name}/README`,
+      `/usr/share/man/man1/${name}.1.gz`,
+      `/var/lib/dpkg/info/${name}.list`
+    ];
+  }
+  function parseSizeMB(sizeStr='0') { return parseFloat(String(sizeStr).replace(/[^\d.]/g,'')) || 0; }
+  function resolveDepsRec(name, out, seen) {
+    if (seen.has(name)) return;
+    seen.add(name);
+    const p = REGISTRY[name];
+    if (!p) return;
+    for (const d of (p.deps||[])) resolveDepsRec(d, out, seen);
+    out.push(name);
+  }
+
   return {
     load() {
       try{inst=JSON.parse(localStorage.getItem(KEY)||'{}');}catch{inst={};}
-      try{meta=JSON.parse(localStorage.getItem(META_KEY)||'{"auto":{},"hold":{},"cache":{}}');}catch{meta={auto:{},hold:{},cache:{}};}
+      try{meta=JSON.parse(localStorage.getItem(META_KEY)||'{"auto":{},"hold":{},"cache":{},"files":{},"history":[]}');}catch{meta={auto:{},hold:{},cache:{},files:{},history:[]};}
+      try{if(!meta.history?.length)meta.history=JSON.parse(localStorage.getItem(HIST_KEY)||'[]');}catch{}
       if(!meta.auto)meta.auto={};
       if(!meta.hold)meta.hold={};
       if(!meta.cache)meta.cache={};
+      if(!meta.files)meta.files={};
+      if(!meta.history)meta.history=[];
       for(const n of Object.keys(inst)) if(REGISTRY[n]) REGISTRY[n].install();
     },
     async update(shell) {
@@ -888,14 +920,19 @@ window.PKG = (() => {
       if(upgradable.length)shell.writeln(`${upgradable.length} package(s) can be upgraded.`);
       else shell.writeln(`All packages are up to date.`);
       meta.cache.lastUpdate=Date.now();
-      localStorage.setItem(META_KEY,JSON.stringify(meta));
+      logPkgHistory('update',[]);
       return '';
     },
     async install(names, shell, opts={}) {
-      // Support multiple package installs
       const pkgNames=Array.isArray(names)?names:[names];
+      const requested=[...new Set(pkgNames.filter(Boolean))];
+      const ordered=[];
+      const seen=new Set();
+      for(const name of requested) resolveDepsRec(name,ordered,seen);
+      const depsOnly=ordered.filter(n=>!requested.includes(n));
+      if(depsOnly.length) shell.writeln(`The following additional packages will be installed:\n  ${depsOnly.join(' ')}`);
       const toInstall=[];
-      for(const name of pkgNames){
+      for(const name of ordered){
         const pkg=REGISTRY[name];
         if(!pkg){shell.writeln(`\x1b[1;31mE:\x1b[0m Unable to locate package ${name}`);continue;}
         if(meta.hold[name]){shell.writeln(`${name} is on hold and cannot be changed.`);continue;}
@@ -906,9 +943,10 @@ window.PKG = (() => {
       shell.writeln(`Reading package lists... \x1b[1mDone\x1b[0m`);
       shell.writeln(`Building dependency tree... \x1b[1mDone\x1b[0m`);
       shell.writeln(`The following NEW packages will be installed:\n  ${toInstall.map(p=>p.name).join(' ')}`);
-      const totalSize=toInstall.reduce((s,p)=>s+parseFloat(p.pkg.size||'0'),0);
+      const totalSize=toInstall.reduce((s,p)=>s+parseSizeMB(p.pkg.size),0);
       shell.writeln(`After this operation, ${totalSize.toFixed(1)} MB of additional disk space will be used.`);
       await delay(100);
+      const installedNow=[];
       for(const {name,pkg} of toInstall){
         shell.writeln(`\x1b[1mGet:1\x1b[0m https://packages.htmlinux.local stable/${name} ${pkg.ver} [${pkg.size||'?'}]`);
         await delay(200);
@@ -921,15 +959,18 @@ window.PKG = (() => {
         shell.writeln(`Setting up ${name} (${pkg.ver}) ...`);
         pkg.install();
         inst[name]={ver:pkg.ver,inst:Date.now()};
-        localStorage.setItem(KEY,JSON.stringify(inst));
-        meta.auto[name]=!!opts.auto;
+        saveInst();
+        meta.auto[name]=opts.auto!==undefined?!!opts.auto:!requested.includes(name);
+        meta.files[name]=generatePackageFiles(name);
         delete meta.hold[name];
-        localStorage.setItem(META_KEY,JSON.stringify(meta));
+        saveMeta();
+        installedNow.push(name);
         // install suggested packages hint
         if(pkg.suggests?.length)
           shell.writeln(`\x1b[2mSuggested packages: ${pkg.suggests.join(' ')}\x1b[0m`);
       }
       shell.writeln(`Processing triggers for man-db (2.11.2) ...`);
+      logPkgHistory('install',installedNow);
       return '';
     },
     remove(name,purge=false) {
@@ -939,31 +980,65 @@ window.PKG = (() => {
       delete inst[name]; delete CMDS[name];
       delete meta.auto[name];
       delete meta.hold[name];
-      localStorage.setItem(KEY,JSON.stringify(inst));
-      localStorage.setItem(META_KEY,JSON.stringify(meta));
+      delete meta.files[name];
+      saveInst();
+      saveMeta();
+      logPkgHistory(purge?'purge':'remove',[name]);
       return `Removing ${name}...\n(Reading database ... done)\n${purge?`Purging configuration files for ${name} ...\n`:''}dpkg: warning: while removing ${name}, directory '/usr/bin' not empty so not removed`;
     },
-    list(f) {
-      const lines=['Listing...',''];
-      for(const [n,p] of Object.entries(REGISTRY)){
-        if(f&&!n.includes(f))continue;
-        const st=inst[n]?'\x1b[32m[installed]\x1b[0m':'[available]';
-        lines.push(`\x1b[1m${n}\x1b[0m/htmlinux ${p.ver} all ${st}`);
+    list(arg) {
+      const opts=Array.isArray(arg)?arg:(arg?[arg]:[]);
+      let filter='';
+      let installedOnly=false,availableOnly=false,namesOnly=false,upgradableOnly=false;
+      let limit=Infinity,page=1;
+      for(let i=0;i<opts.length;i++){
+        const x=opts[i];
+        if(x==='--installed')installedOnly=true;
+        else if(x==='--available')availableOnly=true;
+        else if(x==='--names-only'||x==='--all-names')namesOnly=true;
+        else if(x==='--upgradable')upgradableOnly=true;
+        else if((x==='--limit'||x==='-n')&&opts[i+1])limit=Math.max(1,parseInt(opts[++i])||50);
+        else if(x==='--page'&&opts[i+1])page=Math.max(1,parseInt(opts[++i])||1);
+        else if(!x.startsWith('-')&&!filter)filter=x;
+      }
+      const all=Object.keys(REGISTRY).sort();
+      let rows=all.filter(n=>!filter||n.includes(filter));
+      if(installedOnly)rows=rows.filter(n=>!!inst[n]);
+      if(availableOnly)rows=rows.filter(n=>!inst[n]);
+      if(upgradableOnly)rows=rows.filter(n=>inst[n]&&inst[n].ver!==REGISTRY[n].ver);
+      const total=rows.length;
+      const start=(page-1)*(limit===Infinity?total:limit);
+      const end=limit===Infinity?rows.length:start+limit;
+      rows=rows.slice(start,end);
+      if(namesOnly)return rows.join('\n');
+      const lines=[`Listing... ${rows.length}/${total} package(s) shown (catalog: ${all.length})`,''];
+      for(const n of rows){
+        const p=REGISTRY[n];
+        const tags=[];
+        if(inst[n])tags.push('\x1b[32minstalled\x1b[0m');
+        else tags.push('available');
+        if(meta.auto[n])tags.push('auto');
+        if(meta.hold[n])tags.push('hold');
+        lines.push(`\x1b[1m${n}\x1b[0m/htmlinux ${p.ver} all [${tags.join(', ')}]`);
         lines.push(`  ${p.desc}`);
       }
       return lines.join('\n');
     },
     search(q) {
+      const query=String(q||'').toLowerCase();
       const r=[];
       for(const [n,p] of Object.entries(REGISTRY)){
-        if(!q||n.includes(q)||p.desc.toLowerCase().includes(q.toLowerCase()))
+        if(!query||n.toLowerCase().includes(query)||p.desc.toLowerCase().includes(query))
           r.push(`\x1b[1m${n}\x1b[0m/${inst[n]?'\x1b[32minstalled\x1b[0m':'available'} ${p.ver}\n  ${p.desc}`);
       }
       return r.length?r.join('\n\n'):`No results for '${q}'`;
     },
     show(name) {
       const p=REGISTRY[name];if(!p)return `\x1b[1;31mE:\x1b[0m No packages found matching ${name}`;
-      return `Package: ${name}\nVersion: ${p.ver}\nInstalled-Size: ${p.size||'unknown'}\nDepends: ${p.deps?.join(', ')||'(none)'}\nSuggests: ${p.suggests?.join(', ')||'(none)'}\nDescription: ${p.desc}\nStatus: ${inst[name]?'\x1b[32minstalled\x1b[0m':'not installed'}`;
+      const status=inst[name]?`install ok installed ${inst[name].ver}`:'deinstall ok not-installed';
+      const auto=meta.auto[name]?'yes':'no';
+      const hold=meta.hold[name]?'hold':'ok';
+      return `Package: ${name}\nVersion: ${p.ver}\nPriority: optional\nSection: utils\nMaintainer: HTMLinux Maintainers <packages@htmlinux.local>\nInstalled-Size: ${p.size||'unknown'}\nDepends: ${p.deps?.join(', ')||'(none)'}\nSuggests: ${p.suggests?.join(', ')||'(none)'}\nAPT-Manual-Installed: ${auto==='yes'?'no':'yes'}\nPackage-State: ${hold}\nDescription: ${p.desc}\nStatus: ${status}`;
     },
     depends(name) {
       const p=REGISTRY[name];if(!p)return `E: No packages found matching ${name}`;
@@ -977,6 +1052,23 @@ window.PKG = (() => {
     },
     packageNames(prefix='') {
       return Object.keys(REGISTRY).filter(n=>n.startsWith(prefix)).sort().join('\n');
+    },
+    listFiles(name) {
+      if(!name)return 'dpkg-query: error: --listfiles needs a package name argument';
+      if(!inst[name])return `dpkg-query: package '${name}' is not installed`;
+      return (meta.files[name]||generatePackageFiles(name)).join('\n');
+    },
+    history() {
+      const h=(meta.history||[]).slice(-50).reverse();
+      if(!h.length)return 'No apt history.';
+      return h.map(x=>`${new Date(x.ts).toISOString()} ${x.action} ${x.packages.join(' ')}`).join('\n');
+    },
+    stats() {
+      const total=Object.keys(REGISTRY).length;
+      const installed=Object.keys(inst).length;
+      const auto=Object.values(meta.auto||{}).filter(Boolean).length;
+      const held=Object.keys(meta.hold||{}).length;
+      return `Total package names: ${total}\nInstalled packages: ${installed}\nAuto-installed: ${auto}\nHeld packages: ${held}\nLast update: ${meta.cache?.lastUpdate?new Date(meta.cache.lastUpdate).toISOString():'never'}\nWASM sync additions: ${meta.cache?.remotePackagesAdded||0}`;
     },
     policy(name) {
       const names=name?[name]:Object.keys(REGISTRY).sort();
@@ -1027,8 +1119,9 @@ window.PKG = (() => {
         if(action==='unhold')delete meta.hold[name];
         touched.push(name);
       }
-      localStorage.setItem(META_KEY,JSON.stringify(meta));
+      saveMeta();
       if(!touched.length)return 'No changes made.';
+      logPkgHistory(`mark-${action}`,touched);
       return touched.map(n=>{
         if(action==='auto')return `${n} set to automatically installed.`;
         if(action==='manual')return `${n} set to manually installed.`;
@@ -1040,8 +1133,9 @@ window.PKG = (() => {
       const removable=Object.keys(inst).filter(n=>meta.auto[n]);
       if(!removable.length)return 'Reading package lists... Done\n0 packages removed.';
       for(const n of removable){delete inst[n];delete CMDS[n];delete meta.auto[n];delete meta.hold[n];}
-      localStorage.setItem(KEY,JSON.stringify(inst));
-      localStorage.setItem(META_KEY,JSON.stringify(meta));
+      saveInst();
+      saveMeta();
+      logPkgHistory('autoremove',removable);
       return `Reading package lists... Done\nThe following packages will be REMOVED:\n  ${removable.join(' ')}\n${removable.length} package(s) removed.`;
     },
     async reinstall(names,shell) {
@@ -1056,6 +1150,7 @@ window.PKG = (() => {
         shell.writeln(`Setting up ${n} (${p.ver}) ...`);
         p.install();
       }
+      logPkgHistory('reinstall',toReinstall);
       return `${toReinstall.length} package(s) reinstalled.`;
     },
     async upgradeAll(shell,full=false) {
@@ -1071,13 +1166,14 @@ window.PKG = (() => {
         pkg.install();
         inst[name]={ver:pkg.ver,inst:Date.now()};
       }
-      localStorage.setItem(KEY,JSON.stringify(inst));
+      saveInst();
       if(full){
         const autoCandidates=Object.keys(REGISTRY).filter(n=>!inst[n]&&meta.auto[n]);
         if(autoCandidates.length){
           await this.install(autoCandidates.slice(0,1),shell,{auto:true});
         }
       }
+      logPkgHistory(full?'full-upgrade':'upgrade',toUpgrade);
       return `${toUpgrade.length} upgraded, 0 newly installed, 0 to remove.`;
     },
   };

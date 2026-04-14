@@ -1050,14 +1050,14 @@ window.CMDS = {
   // ── Package manager ──────────────────────────────────────────────
   async apt(args,shell){
     const sub=args[0];
-    if(!sub)return 'Usage: apt [update|install|remove|purge|reinstall|list|search|show|upgrade|full-upgrade|autoremove|depends|rdepends|policy|clean|autoclean|download|source|changelog|mark]';
+    if(!sub)return 'Usage: apt [update|install|remove|purge|reinstall|list|search|show|upgrade|full-upgrade|autoremove|depends|rdepends|policy|clean|autoclean|download|source|changelog|mark|history|stats]';
     if(sub==='update')return await PKG.update(shell||TERM);
     if(sub==='install'&&args[1])return await PKG.install(args.slice(1),shell||TERM);
     if(sub==='reinstall'&&args[1])return await PKG.reinstall(args.slice(1),shell||TERM);
     if(sub==='remove'||sub==='purge')return PKG.remove(args[1],sub==='purge');
     if(sub==='autoremove')return PKG.autoremove(shell||TERM);
-    if(sub==='list')return PKG.list(args[1]);
-    if(sub==='search')return PKG.search(args[1]||'');
+    if(sub==='list')return PKG.list(args.slice(1));
+    if(sub==='search')return PKG.search(args.slice(1).join(' '));
     if(sub==='show')return PKG.show(args[1]);
     if(sub==='upgrade'){await PKG.update(shell||TERM);return PKG.upgradeAll(shell||TERM,false);}
     if(sub==='full-upgrade'||sub==='dist-upgrade'){await PKG.update(shell||TERM);return PKG.upgradeAll(shell||TERM,true);}
@@ -1070,7 +1070,9 @@ window.CMDS = {
     if(sub==='source')return PKG.source(args[1],ENV.cwd);
     if(sub==='changelog')return PKG.changelog(args[1]);
     if(sub==='mark')return PKG.mark(args[1],args.slice(2));
-    return `apt: unknown command '${sub}'\nUsage: apt [update|install|remove|purge|reinstall|list|search|show|upgrade|full-upgrade|autoremove|policy|clean|mark]`;
+    if(sub==='history')return PKG.history();
+    if(sub==='stats')return PKG.stats();
+    return `apt: unknown command '${sub}'\nUsage: apt [update|install|remove|purge|reinstall|list|search|show|upgrade|full-upgrade|autoremove|policy|clean|mark|history|stats]`;
   },
   async aptGet(args,shell){
     if(!args.length)return 'apt-get: usage: apt-get <command> [package]';
@@ -1084,13 +1086,16 @@ window.CMDS = {
     if(sub==='rdepends')return PKG.rdepends(args[1]);
     if(sub==='search')return PKG.search(args.slice(1).join(' '));
     if(sub==='pkgnames')return PKG.packageNames(args[1]||'');
-    return 'apt-cache: usage: apt-cache [policy|show|depends|rdepends|search|pkgnames]';
+    if(sub==='stats')return PKG.stats();
+    return 'apt-cache: usage: apt-cache [policy|show|depends|rdepends|search|pkgnames|stats]';
   },
   dpkg(args){
     const sub=args[0];
-    if(sub==='-l'||sub==='--list')return PKG.list(args[1]);
+    if(sub==='-l'||sub==='--list')return PKG.list(args.slice(1));
+    if(sub==='-L'||sub==='--listfiles')return PKG.listFiles(args[1]);
+    if(sub==='-s'||sub==='--status')return PKG.show(args[1]);
     if(sub==='-i')return `dpkg: use 'apt install' for package installation`;
-    if(sub==='--get-selections')return PKG.list();
+    if(sub==='--get-selections')return PKG.list(['--installed','--names-only']);
     return 'dpkg: use apt for package management';
   },
 
@@ -1293,7 +1298,7 @@ ${'─'.repeat(60)}
 \x1b[1mCron:\x1b[0m         crontab -e/-l/-r
 \x1b[1mPackages:\x1b[0m     apt / apt-get / apt-cache (update install reinstall
               remove purge list search show policy mark clean
-              autoremove download source changelog upgrade)
+              autoremove download source changelog upgrade history stats)
               Available: python node htop neofetch git curl wget
                          vim lua jq ripgrep fzf httpie tree
 \x1b[1mEditor:\x1b[0m       nano / vi / vim
@@ -1311,7 +1316,7 @@ Type \x1b[1mman <cmd>\x1b[0m for details. Tab to autocomplete.`;
       grep:'grep [options] pattern [files]\n  -i  case insensitive  -v  invert match  -n  show line numbers\n  -r  recursive  -c  count  -l  list files  -o  only matching  -w  whole word',
       find:'find [path] [options]\n  -name pattern   match filename (glob)\n  -type f|d|l     file type filter\n  -maxdepth n     limit recursion depth',
       nano:'nano [file]\n  ^O  Write (save)  ^X  Exit  ^K  Cut line  ^U  Paste\n  ^W  Search  ^R  Insert file  ^C  Show cursor position',
-      apt:'apt [command] [package]\n  update                 Refresh package index\n  install <pkg...>       Install packages\n  reinstall <pkg...>     Reinstall packages\n  remove|purge <pkg>     Remove package (with or without config purge)\n  list [filter]          List packages\n  search <query>         Search packages\n  show <pkg>             Show package info\n  policy [pkg]           Show candidate/install versions\n  mark auto|manual <p>   Toggle auto/manual state\n  mark hold|unhold <p>   Hold package versions\n  clean|autoclean        Clean package cache\n  autoremove             Remove auto-installed packages\n  download <pkg>         Download .deb to current directory\n  source <pkg>           Download simulated source package\n  changelog <pkg>        Show package changelog\n  upgrade|full-upgrade   Upgrade all installed packages\n  depends <pkg>          Show dependencies\n  rdepends <pkg>         Show reverse dependencies\n\nAlso available: apt-get, apt-cache',
+      apt:'apt [command] [package]\n  update                 Refresh package index\n  install <pkg...>       Install packages (with dependencies)\n  reinstall <pkg...>     Reinstall packages\n  remove|purge <pkg>     Remove package (with or without config purge)\n  list [opts] [filter]   List packages\n    --installed --available --names-only --limit N --page N\n  search <query>         Search packages\n  show <pkg>             Show package info\n  policy [pkg]           Show candidate/install versions\n  mark auto|manual <p>   Toggle auto/manual state\n  mark hold|unhold <p>   Hold package versions\n  clean|autoclean        Clean package cache\n  autoremove             Remove auto-installed packages\n  download <pkg>         Download .deb to current directory\n  source <pkg>           Download simulated source package\n  changelog <pkg>        Show package changelog\n  history                Show apt history log\n  stats                  Show package db stats\n  upgrade|full-upgrade   Upgrade all installed packages\n  depends <pkg>          Show dependencies\n  rdepends <pkg>         Show reverse dependencies\n\nAlso available: apt-get, apt-cache, dpkg -L',
       bash:'Bash built-ins & shell features:\n  Variables: VAR=val, $VAR, ${VAR}, $?, $$, $#, $@\n  Subshell:  $(cmd) or `cmd`\n  Control:   if/then/elif/else/fi\n             for VAR in list; do ... done\n             while cond; do ... done\n  Redirect:  > >> < 2> 2>&1\n  Pipe:      cmd1 | cmd2 | cmd3\n  Logic:     cmd1 && cmd2  cmd1 || cmd2\n  Functions: fname() { commands; }',
       units:'units <value> <from> <to>\n  Temperature: c/f\n  Distance:    km/miles, in/cm, ft/m\n  Weight:      kg/lbs, g/oz\n  Volume:      l/gal\n  Data:        gb/mb, mb/kb, kb/bytes\n  Speed:       mph/kph\n  Angle:       deg/rad\n\nExample: units 100 km miles',
       git:'git <command>\n  init            Create new repository\n  clone <url>     Clone a GitHub repo (fetches real files)\n  status          Show working tree status\n  add .           Stage all files\n  commit -m "msg" Create a commit\n  log [--oneline] Show commit history\n  branch [-d]     List or delete branches\n  checkout [-b]   Switch or create branch\n  stash [pop]     Stash or restore changes\n  remote -v       Show remotes\n  diff            Show staged changes\n  push / pull     Simulate push/pull',
