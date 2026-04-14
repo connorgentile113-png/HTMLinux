@@ -1,3 +1,4 @@
+'use strict';
 window.Shell = {
   aliases: { ll:'ls -la', la:'ls -A', l:'ls -CF', cls:'clear', '..':'cd ..', '...':'cd ../..' },
   replStack: [],
