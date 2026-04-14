@@ -1,6 +1,8 @@
 window.PKG = (() => {
   const KEY='hl_pkgs';
+  const META_KEY='hl_pkgs_meta';
   let inst={};
+  let meta={auto:{},hold:{},cache:{}};
 
   const REGISTRY = {
     python: {
@@ -700,6 +702,10 @@ window.PKG = (() => {
   return {
     load() {
       try{inst=JSON.parse(localStorage.getItem(KEY)||'{}');}catch{inst={};}
+      try{meta=JSON.parse(localStorage.getItem(META_KEY)||'{"auto":{},"hold":{},"cache":{}}');}catch{meta={auto:{},hold:{},cache:{}};}
+      if(!meta.auto)meta.auto={};
+      if(!meta.hold)meta.hold={};
+      if(!meta.cache)meta.cache={};
       for(const n of Object.keys(inst)) if(REGISTRY[n]) REGISTRY[n].install();
     },
     async update(shell) {
@@ -713,15 +719,18 @@ window.PKG = (() => {
       const upgradable=Object.keys(inst).filter(n=>REGISTRY[n]);
       if(upgradable.length)shell.writeln(`${upgradable.length} package(s) can be upgraded.`);
       else shell.writeln(`All packages are up to date.`);
+      meta.cache.lastUpdate=Date.now();
+      localStorage.setItem(META_KEY,JSON.stringify(meta));
       return '';
     },
-    async install(names, shell) {
+    async install(names, shell, opts={}) {
       // Support multiple package installs
       const pkgNames=Array.isArray(names)?names:[names];
       const toInstall=[];
       for(const name of pkgNames){
         const pkg=REGISTRY[name];
         if(!pkg){shell.writeln(`\x1b[1;31mE:\x1b[0m Unable to locate package ${name}`);continue;}
+        if(meta.hold[name]){shell.writeln(`${name} is on hold and cannot be changed.`);continue;}
         if(inst[name]){shell.writeln(`${name} is already the newest version (${pkg.ver}).`);continue;}
         toInstall.push({name,pkg});
       }
@@ -745,6 +754,9 @@ window.PKG = (() => {
         pkg.install();
         inst[name]={ver:pkg.ver,inst:Date.now()};
         localStorage.setItem(KEY,JSON.stringify(inst));
+        meta.auto[name]=!!opts.auto;
+        delete meta.hold[name];
+        localStorage.setItem(META_KEY,JSON.stringify(meta));
         // install suggested packages hint
         if(pkg.suggests?.length)
           shell.writeln(`\x1b[2mSuggested packages: ${pkg.suggests.join(' ')}\x1b[0m`);
@@ -752,11 +764,16 @@ window.PKG = (() => {
       shell.writeln(`Processing triggers for man-db (2.11.2) ...`);
       return '';
     },
-    remove(name) {
+    remove(name,purge=false) {
+      if(!name)return 'E: remove requires at least one package name';
+      if(meta.hold[name])return `${name} is on hold and cannot be removed`;
       if(!inst[name])return `${name}: not installed`;
       delete inst[name]; delete CMDS[name];
+      delete meta.auto[name];
+      delete meta.hold[name];
       localStorage.setItem(KEY,JSON.stringify(inst));
-      return `Removing ${name}...\n(Reading database ... done)\nPurging configuration files for ${name} ...\ndpkg: warning: while removing ${name}, directory '/usr/bin' not empty so not removed`;
+      localStorage.setItem(META_KEY,JSON.stringify(meta));
+      return `Removing ${name}...\n(Reading database ... done)\n${purge?`Purging configuration files for ${name} ...\n`:''}dpkg: warning: while removing ${name}, directory '/usr/bin' not empty so not removed`;
     },
     list(f) {
       const lines=['Listing...',''];
@@ -790,8 +807,91 @@ window.PKG = (() => {
       if(!r.length)return `${name}\n  (no reverse dependencies)`;
       return `${name}\nReverse dependencies:\n${r.map(([n])=>`  Depends: ${n}`).join('\n')}`;
     },
-    async upgradeAll(shell) {
-      const toUpgrade=Object.keys(inst).filter(n=>REGISTRY[n]);
+    packageNames(prefix='') {
+      return Object.keys(REGISTRY).filter(n=>n.startsWith(prefix)).sort().join('\n');
+    },
+    policy(name) {
+      const names=name?[name]:Object.keys(REGISTRY).sort();
+      return names.map(n=>{
+        const p=REGISTRY[n];
+        if(!p)return `${n}:\n  Installed: (none)\n  Candidate: (none)\n  Version table:\n *** (none) 100`;
+        const installed=inst[n]?.ver||'(none)';
+        return `${n}:\n  Installed: ${installed}\n  Candidate: ${p.ver}\n  Version table:\n *** ${p.ver} 500\n        500 https://packages.htmlinux.local stable/main amd64 Packages`;
+      }).join('\n');
+    },
+    clean(auto=false) {
+      const removed=auto?Math.floor(Math.random()*3):Math.floor(Math.random()*7+3);
+      return `Reading package lists... Done\n${auto?'Autoclean':'Clean'} complete.\nRemoved ${removed} package file(s) from cache.`;
+    },
+    download(name,cwd='/home/user') {
+      if(!name)return 'E: download requires a package name';
+      const p=REGISTRY[name];
+      if(!p)return `E: Unable to locate package ${name}`;
+      const file=`${name}_${p.ver}_all.deb`;
+      VFS.writeFile(VFS.norm(file,cwd),`DEB PACKAGE\nname=${name}\nversion=${p.ver}\n`,cwd);
+      return `Get:1 https://packages.htmlinux.local stable/${name} ${p.ver} [${p.size||'?' }]\nFetched 1 file.\nSaved to ./${file}`;
+    },
+    source(name,cwd='/home/user') {
+      if(!name)return 'E: source requires a package name';
+      const p=REGISTRY[name];
+      if(!p)return `E: Unable to find a source package for ${name}`;
+      const dir=VFS.norm(`${name}-${p.ver}`,cwd);
+      VFS.mkdir(dir);
+      VFS.writeFile(`${dir}/README.source`,`Source package: ${name}\nVersion: ${p.ver}\nDescription: ${p.desc}\n`);
+      VFS.writeFile(`${dir}/debian.control`,`Package: ${name}\nVersion: ${p.ver}\nArchitecture: all\nDescription: ${p.desc}\n`);
+      return `NOTICE: '${name}' packaging is simulated in HTMLinux.\nSuccessfully unpacked source package in ${name}-${p.ver}/`;
+    },
+    changelog(name) {
+      if(!name)return 'E: changelog requires a package name';
+      const p=REGISTRY[name];
+      if(!p)return `E: Unable to locate package ${name}`;
+      return `${name} (${p.ver}) stable; urgency=medium\n\n  * Rebuilt for HTMLinux package registry.\n  * Updated browser-safe wrappers and docs.\n\n -- HTMLinux Maintainers <packages@htmlinux.local>  ${new Date().toUTCString()}`;
+    },
+    mark(action,names=[]) {
+      if(!action||!['auto','manual','hold','unhold'].includes(action))return 'apt mark: usage: apt mark [auto|manual|hold|unhold] <package...>';
+      if(!names.length)return 'apt mark: no packages specified';
+      const touched=[];
+      for(const name of names){
+        if(!REGISTRY[name])continue;
+        if(action==='auto')meta.auto[name]=true;
+        if(action==='manual')meta.auto[name]=false;
+        if(action==='hold')meta.hold[name]=true;
+        if(action==='unhold')delete meta.hold[name];
+        touched.push(name);
+      }
+      localStorage.setItem(META_KEY,JSON.stringify(meta));
+      if(!touched.length)return 'No changes made.';
+      return touched.map(n=>{
+        if(action==='auto')return `${n} set to automatically installed.`;
+        if(action==='manual')return `${n} set to manually installed.`;
+        if(action==='hold')return `${n} set on hold.`;
+        return `Canceled hold on ${n}.`;
+      }).join('\n');
+    },
+    autoremove() {
+      const removable=Object.keys(inst).filter(n=>meta.auto[n]);
+      if(!removable.length)return 'Reading package lists... Done\n0 packages removed.';
+      for(const n of removable){delete inst[n];delete CMDS[n];delete meta.auto[n];delete meta.hold[n];}
+      localStorage.setItem(KEY,JSON.stringify(inst));
+      localStorage.setItem(META_KEY,JSON.stringify(meta));
+      return `Reading package lists... Done\nThe following packages will be REMOVED:\n  ${removable.join(' ')}\n${removable.length} package(s) removed.`;
+    },
+    async reinstall(names,shell) {
+      const list=Array.isArray(names)?names:[names];
+      const toReinstall=list.filter(n=>inst[n]&&REGISTRY[n]);
+      if(!toReinstall.length)return '0 packages reinstalled.';
+      shell.writeln(`Reinstalling packages: ${toReinstall.join(' ')}`);
+      for(const n of toReinstall){
+        const p=REGISTRY[n];
+        shell.writeln(`Unpacking ${n} (${p.ver}) over (${inst[n].ver}) ...`);
+        await delay(100);
+        shell.writeln(`Setting up ${n} (${p.ver}) ...`);
+        p.install();
+      }
+      return `${toReinstall.length} package(s) reinstalled.`;
+    },
+    async upgradeAll(shell,full=false) {
+      const toUpgrade=Object.keys(inst).filter(n=>REGISTRY[n]&&!meta.hold[n]);
       if(!toUpgrade.length)return 'All packages are up to date.';
       shell.writeln(`The following packages will be upgraded:\n  ${toUpgrade.join(' ')}`);
       await delay(300);
@@ -804,6 +904,12 @@ window.PKG = (() => {
         inst[name]={ver:pkg.ver,inst:Date.now()};
       }
       localStorage.setItem(KEY,JSON.stringify(inst));
+      if(full){
+        const autoCandidates=Object.keys(REGISTRY).filter(n=>!inst[n]&&meta.auto[n]);
+        if(autoCandidates.length){
+          await this.install(autoCandidates.slice(0,1),shell,{auto:true});
+        }
+      }
       return `${toUpgrade.length} upgraded, 0 newly installed, 0 to remove.`;
     },
   };

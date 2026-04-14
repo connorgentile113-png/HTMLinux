@@ -1050,18 +1050,41 @@ window.CMDS = {
   // ── Package manager ──────────────────────────────────────────────
   async apt(args,shell){
     const sub=args[0];
-    if(!sub)return 'Usage: apt [update|install|remove|purge|list|search|show|upgrade|autoremove|depends|rdepends] [package]';
+    if(!sub)return 'Usage: apt [update|install|remove|purge|reinstall|list|search|show|upgrade|full-upgrade|autoremove|depends|rdepends|policy|clean|autoclean|download|source|changelog|mark]';
     if(sub==='update')return await PKG.update(shell||TERM);
     if(sub==='install'&&args[1])return await PKG.install(args.slice(1),shell||TERM);
-    if(sub==='remove'||sub==='purge')return PKG.remove(args[1]);
-    if(sub==='autoremove')return 'Reading package lists... Done\n0 packages removed.';
+    if(sub==='reinstall'&&args[1])return await PKG.reinstall(args.slice(1),shell||TERM);
+    if(sub==='remove'||sub==='purge')return PKG.remove(args[1],sub==='purge');
+    if(sub==='autoremove')return PKG.autoremove(shell||TERM);
     if(sub==='list')return PKG.list(args[1]);
     if(sub==='search')return PKG.search(args[1]||'');
     if(sub==='show')return PKG.show(args[1]);
-    if(sub==='upgrade'){await PKG.update(shell||TERM);return PKG.upgradeAll(shell||TERM);}
+    if(sub==='upgrade'){await PKG.update(shell||TERM);return PKG.upgradeAll(shell||TERM,false);}
+    if(sub==='full-upgrade'||sub==='dist-upgrade'){await PKG.update(shell||TERM);return PKG.upgradeAll(shell||TERM,true);}
     if(sub==='depends')return PKG.depends(args[1]);
     if(sub==='rdepends')return PKG.rdepends(args[1]);
-    return `apt: unknown command '${sub}'\nUsage: apt [update|install|remove|list|search|show|upgrade|depends]`;
+    if(sub==='policy')return PKG.policy(args[1]);
+    if(sub==='clean')return PKG.clean(false);
+    if(sub==='autoclean')return PKG.clean(true);
+    if(sub==='download')return PKG.download(args[1],ENV.cwd);
+    if(sub==='source')return PKG.source(args[1],ENV.cwd);
+    if(sub==='changelog')return PKG.changelog(args[1]);
+    if(sub==='mark')return PKG.mark(args[1],args.slice(2));
+    return `apt: unknown command '${sub}'\nUsage: apt [update|install|remove|purge|reinstall|list|search|show|upgrade|full-upgrade|autoremove|policy|clean|mark]`;
+  },
+  async aptGet(args,shell){
+    if(!args.length)return 'apt-get: usage: apt-get <command> [package]';
+    return CMDS.apt(args,shell||TERM);
+  },
+  aptCache(args){
+    const sub=args[0];
+    if(sub==='policy')return PKG.policy(args[1]);
+    if(sub==='show')return PKG.show(args[1]);
+    if(sub==='depends')return PKG.depends(args[1]);
+    if(sub==='rdepends')return PKG.rdepends(args[1]);
+    if(sub==='search')return PKG.search(args.slice(1).join(' '));
+    if(sub==='pkgnames')return PKG.packageNames(args[1]||'');
+    return 'apt-cache: usage: apt-cache [policy|show|depends|rdepends|search|pkgnames]';
   },
   dpkg(args){
     const sub=args[0];
@@ -1144,6 +1167,87 @@ window.CMDS = {
   expr(args){try{return String(Function('"use strict";return('+args.join(' ')+')')());}catch{return '0';}},
   read(args){const v=args[args.indexOf('-p')!==-1?2:0]||'REPLY';ENV.set(v,'');return '';},
 
+  // ── Kernel/Admin (new) ───────────────────────────────────────────
+  arch(){return 'x86_64';},
+  lscpu(){return `Architecture:            x86_64\nCPU op-mode(s):          32-bit, 64-bit\nCPU(s):                  ${navigator.hardwareConcurrency||4}\nModel name:              Browser Virtual CPU\nThread(s) per core:      2\nCore(s) per socket:      ${Math.max(1,Math.floor((navigator.hardwareConcurrency||4)/2))}`;},
+  lsmod(){return `Module                  Size  Used by\nvfs_htmlinux           24576  1\nnet_htmlinux           16384  0\ntty_htmlinux           12288  2`;},
+  modprobe(args){const m=args[0];if(!m)return 'modprobe: missing module name';return '';},
+  modinfo(args){const m=args[0]||'vfs_htmlinux';return `filename:       /lib/modules/6.1.0-htmlinux/${m}.ko\ndescription:    HTMLinux kernel module (simulated)\nlicense:        GPL\nvermagic:       6.1.0-htmlinux SMP`;},
+  insmod(args){return args[0]?'' :'insmod: missing module filename';},
+  rmmod(args){return args[0]?'' :'rmmod: missing module name';},
+  depmod(){return '';},
+  kmod(args){return args[0]?`kmod: executed ${args.join(' ')}`:'kmod: usage: kmod <command>';},
+  lsusb(){return `Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub\nBus 001 Device 002: ID 046d:c534 Logitech USB Receiver`;},
+  lspci(){return `00:00.0 Host bridge: Browser VM Host Bridge\n00:01.0 VGA compatible controller: HTMLinux Virtual GPU\n00:02.0 Ethernet controller: HTMLinux VirtIO Network Device`;},
+  lsdev(){return `/dev/null\n/dev/zero\n/dev/urandom\n/dev/pts/0`;},
+  udevadm(args){if(args[0]==='info')return 'P: /devices/virtual/tty/tty0\nE: DEVNAME=/dev/tty0\nE: SUBSYSTEM=tty';return 'udevadm: usage: udevadm [info|monitor|control|trigger]';},
+  blkid(){return '/dev/vda1: UUID="HTMLINUX-ROOT" TYPE="ext4" PARTUUID="00000001-01"';},
+  fdisk(args){if(args.includes('-l'))return `Disk /dev/vda: 20 GiB, 21474836480 bytes\nDevice     Boot Start      End  Sectors Size Id Type\n/dev/vda1  *     2048 41943039 41940992  20G 83 Linux`;return 'fdisk: simulated mode only (use -l)';},
+  parted(args){if(args.includes('print'))return `Model: HTMLinux Virtual Disk (file)\nDisk /dev/vda: 20.0GB\nNumber  Start   End     Size    Type     File system  Flags\n 1      1049kB  20.0GB  20.0GB  primary  ext4         boot`;return 'parted: simulated mode only';},
+  mkfs(args){const dev=args.find(a=>a.startsWith('/dev/'));if(!dev)return 'mkfs: missing device';return `mke2fs 1.47.0 (simulated)\nCreating filesystem on ${dev} ... done`;},
+  fsck(args){const dev=args.find(a=>a.startsWith('/dev/'));if(!dev)return 'fsck: missing device';return `fsck from util-linux 2.39\n${dev}: clean, 1024/131072 files, 4096/524288 blocks`;},
+  mkswap(args){const dev=args.find(a=>a.startsWith('/dev/'));if(!dev)return 'mkswap: missing device';return `Setting up swapspace version 1, size = 512 MiB\nno label, UUID=HTMLINUX-SWAP`;},
+  swapon(args){return args[0]?'' :'swapon: missing device';},
+  swapoff(args){return args[0]?'' :'swapoff: missing device';},
+  lsipc(){return `RESOURCE DESCRIPTION\nMessage Queues 0\nShared Memory Segments 0\nSemaphore Arrays 0`;},
+  ipcs(){return `------ Message Queues --------\nkey        msqid      owner      perms      used-bytes   messages\n\n------ Shared Memory Segments --------\nkey        shmid      owner      perms      bytes      nattch     status`;},
+  ipcrm(){return '';},
+  systemctl(args){
+    const sub=args[0]||'status';
+    if(sub==='list-units')return `UNIT                         LOAD   ACTIVE SUB     DESCRIPTION\ncron.service                 loaded active running Regular background program processing daemon\nnetworking.service           loaded active exited  Raise network interfaces\nsshd.service                 loaded active running OpenBSD Secure Shell server`;
+    if(sub==='status')return `● htmlinux.service - HTMLinux Userspace\n   Loaded: loaded (/etc/systemd/system/htmlinux.service; enabled)\n   Active: active (running) since ${new Date(BOOT_T).toLocaleString()}`;
+    if(['start','stop','restart','enable','disable','daemon-reload'].includes(sub))return '';
+    return `systemctl: unsupported action '${sub}'`;
+  },
+  service(args){if(!args[0]||!args[1])return 'usage: service <name> <start|stop|restart|status>';return CMDS.systemctl([args[1],args[0]]);},
+  loginctl(){return `SESSION UID USER SEAT TTY\n      1 1000 user seat0 pts/0`;},
+  hostnamectl(){return ` Static hostname: ${ENV.v.HOSTNAME}\n       Icon name: computer-vm\n         Chassis: vm\n      Machine ID: htmlinux-demo\n         Boot ID: ${Math.random().toString(16).slice(2,18)}\nOperating System: HTMLinux 2.0\n          Kernel: Linux 6.1.0-htmlinux\n    Architecture: x86-64`;},
+  timedatectl(){return `               Local time: ${new Date().toString()}\n           Universal time: ${new Date().toUTCString()}\n                 RTC time: ${new Date().toUTCString()}\n                Time zone: UTC (UTC, +0000)\nSystem clock synchronized: yes\n              NTP service: active`;},
+  localectl(){return `System Locale: LANG=${ENV.v.LANG}\nVC Keymap: us\nX11 Layout: us`;},
+  procinfo(){return `Kernel version: 6.1.0-htmlinux\nUptime: ${Math.floor((Date.now()-BOOT_T)/1000)}s\nPID max: 32768\nOpen files max: 1024`;},
+  top(){return `top - ${new Date().toTimeString().slice(0,8)} up ${Math.floor((Date.now()-BOOT_T)/60000)} min, 1 user, load average: 0.08, 0.05, 0.01\nTasks: 5 total, 1 running, 4 sleeping, 0 stopped, 0 zombie\n%Cpu(s): 2.1 us, 1.0 sy, 0.0 ni, 96.9 id, 0.0 wa\nMiB Mem :  8192 total,  1024 free,   640 used,  6528 buff/cache\n\n  PID USER      PR  NI    VIRT    RES    SHR S  %CPU %MEM     TIME+ COMMAND\n 1000 user      20   0   10320   4128   3012 S   1.3  0.1   0:00.10 bash`;},
+  sar(){return `Linux 6.1.0-htmlinux (${ENV.v.HOSTNAME})\t${new Date().toLocaleDateString()}\n\n12:00:00 AM     CPU     %user     %system    %idle\n12:00:01 AM     all      2.00       1.00     97.00`;},
+  pidstat(){return `Linux 6.1.0-htmlinux (${ENV.v.HOSTNAME})\n\n12:00:00 AM   UID       PID    %usr %system  %guest   %wait    %CPU   CPU  Command\n12:00:01 AM  1000      1000    1.00    0.50    0.00    0.00    1.50     0  bash`;},
+  perf(args){return args[0]?`perf: ${args.join(' ')} (simulated)\nSamples: 120  of event 'cycles', Event count (approx.): 452334`:'perf: usage: perf <subcommand>';},
+  lslocks(){return `COMMAND           PID  TYPE SIZE MODE  M START END PATH\nbash             1000 POSIX 4K  WRITE 0     0   EOF /home/user/.bash_history`;},
+  fuser(args){return args[0]?`${args[0]}: 1000`:'fuser: missing file or socket';},
+  lsof(){return `COMMAND PID USER   FD   TYPE DEVICE SIZE/OFF NODE NAME\nbash    1000 user  cwd    DIR  8,1      4096 1024 /home/user\nbash    1000 user    0u   CHR  136,0      0t0    3 /dev/pts/0`;},
+  nice(args){if(!args.length)return '0';const cmd=args.filter(a=>!a.startsWith('-')).join(' ');return cmd?Shell.exec(cmd):'nice: missing command';},
+  renice(args){const pid=args.find(a=>/^\d+$/.test(a));return pid?`${pid} (process ID) old priority 0, new priority 5`:'renice: bad process id';},
+  chrt(){return `pid 1000's current scheduling policy: SCHED_OTHER\npid 1000's current scheduling priority: 0`;},
+  taskset(){return `pid 1000's current affinity mask: f`;},
+  getent(args){
+    if(args[0]==='passwd')return VFS.readFile('/etc/passwd')||'';
+    if(args[0]==='group')return VFS.readFile('/etc/group')||'';
+    if(args[0]==='hosts')return VFS.readFile('/etc/hosts')||'';
+    return 'getent: usage: getent [passwd|group|hosts] [key]';
+  },
+  groups(args){const u=args[0]||ENV.v.USER;const usr=UserDB.getUser(u);if(!usr)return `groups: '${u}': no such user`;return `${u} : ${(usr.groups||[]).join(' ')}`;},
+  newgrp(args){if(!args[0])return 'newgrp: missing group';return '';},
+  chsh(args){const shell=args[args.indexOf('-s')+1];if(!shell)return 'chsh: option requires an argument -- s';UserDB.modifyUser(ENV.v.USER,{shell});return 'Shell changed.';},
+  chfn(args){const i=args.indexOf('-f');if(i===-1||!args[i+1])return 'chfn: missing full name';UserDB.modifyUser(ENV.v.USER,{gecos:args[i+1]});return '';},
+  lastlog(){return `Username         Port     From             Latest\nroot                                     **Never logged in**\nuser             pts/0   localhost        ${new Date().toString()}`;},
+  finger(args){const u=args[0]||ENV.v.USER;const usr=UserDB.getUser(u);if(!usr)return `finger: ${u}: no such user`;return `Login: ${usr.name}\t\tName: ${usr.gecos||usr.name}\nDirectory: ${usr.home}\t\tShell: ${usr.shell}\nOn since ${new Date().toString()} on pts/0`;},
+  mesg(args){if(!args[0])return 'is y';return '';},
+  wall(args){if(!args.length)return 'wall: message expected';TERM.writeln(`Broadcast message from ${ENV.v.USER}@${ENV.v.HOSTNAME}:\n${args.join(' ')}`);return '';},
+  write(args){if(args.length<2)return 'write: usage: write user [tty]';TERM.writeln(`Message to ${args[0]}: ${args.slice(1).join(' ')}`);return '';},
+  runlevel(){return 'N 5';},
+  bootctl(){return `System:\n      Firmware: UEFI 2.70 (simulated)\n Firmware Arch: x64\n   Secure Boot: disabled\n  Current Boot Loader: HTMLinux`;},
+  'grub-install'(args){return args[0]?`Installing for x86_64-efi platform to ${args[0]}...\nInstallation finished. No error reported.`:'grub-install: missing install device';},
+  updateGrub(){return `Generating grub configuration file ...\nFound linux image: /boot/vmlinuz-6.1.0-htmlinux\ndone`;},
+  'update-grub':(args)=>CMDS.updateGrub(args),
+  lsinitramfs(){return `usr/bin/busybox\nusr/bin/bash\ninit\netc/fstab`;},
+  initramfs(){return 'initramfs-tools: generated /boot/initrd.img-6.1.0-htmlinux';},
+  mkinitcpio(){return '==> Building image from preset: default\n==> Image generation successful';},
+  dracut(){return 'dracut: Executing: /usr/bin/dracut --force\ndracut: *** Creating initramfs image file done ***';},
+  kernelstub(){return 'kernelstub.Config    :\nKernel Stub Manager (simulated)';},
+  kexec(){return 'kexec_load failed: Operation not permitted';},
+  crash(){return 'crash: cannot open /proc/kcore (simulated environment)';},
+  sysrq(args){return args[0]?`SysRq : ${args[0]} accepted`:'sysrq: missing key';},
+  halt(){return CMDS.poweroff([]);},
+  shutdown(args){if(args.includes('now'))return CMDS.poweroff([]);return 'Shutdown scheduled (simulated).';},
+  sync(){return '';},
+
   // ── Fun ──────────────────────────────────────────────────────────
   cowsay(args){const m=args.join(' ')||'Moo!';const b=m.length+2;return ` ${'_'.repeat(b)}\n< ${m} >\n ${'‾'.repeat(b)}\n        \\   ^__^\n         \\  (oo)\\_______\n            (__)\\       )\\/\\\n                ||----w |\n                ||     ||`;},
   fortune(){const q=['The art of programming is the art of organizing complexity. — Dijkstra','Any fool can write code that a computer can understand. — Fowler','Talk is cheap. Show me the code. — Torvalds','In theory there is no difference between theory and practice. In practice there is. — Yogi Berra','The most dangerous phrase in the language is "We have always done it this way." — Grace Hopper','sudo make me a sandwich. — xkcd','There are 10 types of people: those who understand binary, and those who do not.','The best code is no code at all. — Jeff Atwood','It works on my machine. — Every Developer'];return q[Math.floor(Math.random()*q.length)];},
@@ -1187,8 +1291,9 @@ ${'─'.repeat(60)}
 \x1b[1mMath:\x1b[0m         bc calc seq factor numfmt shuf expr units cal
 \x1b[1mUser:\x1b[0m         whoami id su sudo passwd hostname useradd userdel
 \x1b[1mCron:\x1b[0m         crontab -e/-l/-r
-\x1b[1mPackages:\x1b[0m     apt [update|install|remove|list|search|show|upgrade]
-              apt depends  apt rdepends
+\x1b[1mPackages:\x1b[0m     apt / apt-get / apt-cache (update install reinstall
+              remove purge list search show policy mark clean
+              autoremove download source changelog upgrade)
               Available: python node htop neofetch git curl wget
                          vim lua jq ripgrep fzf httpie tree
 \x1b[1mEditor:\x1b[0m       nano / vi / vim
@@ -1206,7 +1311,7 @@ Type \x1b[1mman <cmd>\x1b[0m for details. Tab to autocomplete.`;
       grep:'grep [options] pattern [files]\n  -i  case insensitive  -v  invert match  -n  show line numbers\n  -r  recursive  -c  count  -l  list files  -o  only matching  -w  whole word',
       find:'find [path] [options]\n  -name pattern   match filename (glob)\n  -type f|d|l     file type filter\n  -maxdepth n     limit recursion depth',
       nano:'nano [file]\n  ^O  Write (save)  ^X  Exit  ^K  Cut line  ^U  Paste\n  ^W  Search  ^R  Insert file  ^C  Show cursor position',
-      apt:'apt [command] [package]\n  update          Refresh package list\n  install <pkg>   Install (multiple: apt install git curl)\n  remove <pkg>    Remove package\n  list [filter]   List packages\n  search <query>  Search packages\n  show <pkg>      Show package info\n  upgrade         Upgrade all installed packages\n  depends <pkg>   Show dependencies\n  rdepends <pkg>  Show reverse dependencies\n\nAvailable packages:\n  python, node, htop, neofetch, git, curl, wget, vim, lua,\n  jq, ripgrep, fzf, httpie, tree',
+      apt:'apt [command] [package]\n  update                 Refresh package index\n  install <pkg...>       Install packages\n  reinstall <pkg...>     Reinstall packages\n  remove|purge <pkg>     Remove package (with or without config purge)\n  list [filter]          List packages\n  search <query>         Search packages\n  show <pkg>             Show package info\n  policy [pkg]           Show candidate/install versions\n  mark auto|manual <p>   Toggle auto/manual state\n  mark hold|unhold <p>   Hold package versions\n  clean|autoclean        Clean package cache\n  autoremove             Remove auto-installed packages\n  download <pkg>         Download .deb to current directory\n  source <pkg>           Download simulated source package\n  changelog <pkg>        Show package changelog\n  upgrade|full-upgrade   Upgrade all installed packages\n  depends <pkg>          Show dependencies\n  rdepends <pkg>         Show reverse dependencies\n\nAlso available: apt-get, apt-cache',
       bash:'Bash built-ins & shell features:\n  Variables: VAR=val, $VAR, ${VAR}, $?, $$, $#, $@\n  Subshell:  $(cmd) or `cmd`\n  Control:   if/then/elif/else/fi\n             for VAR in list; do ... done\n             while cond; do ... done\n  Redirect:  > >> < 2> 2>&1\n  Pipe:      cmd1 | cmd2 | cmd3\n  Logic:     cmd1 && cmd2  cmd1 || cmd2\n  Functions: fname() { commands; }',
       units:'units <value> <from> <to>\n  Temperature: c/f\n  Distance:    km/miles, in/cm, ft/m\n  Weight:      kg/lbs, g/oz\n  Volume:      l/gal\n  Data:        gb/mb, mb/kb, kb/bytes\n  Speed:       mph/kph\n  Angle:       deg/rad\n\nExample: units 100 km miles',
       git:'git <command>\n  init            Create new repository\n  clone <url>     Clone a GitHub repo (fetches real files)\n  status          Show working tree status\n  add .           Stage all files\n  commit -m "msg" Create a commit\n  log [--oneline] Show commit history\n  branch [-d]     List or delete branches\n  checkout [-b]   Switch or create branch\n  stash [pop]     Stash or restore changes\n  remote -v       Show remotes\n  diff            Show staged changes\n  push / pull     Simulate push/pull',
@@ -1288,6 +1393,8 @@ CMDS['.']  = CMDS.source;
 CMDS['typeset'] = CMDS.declare;
 CMDS['nc'] = CMDS.nc;
 CMDS['tracepath'] = CMDS.traceroute;
+CMDS['apt-get'] = CMDS.aptGet;
+CMDS['apt-cache'] = CMDS.aptCache;
 
 // scope aliases
 var CMDS = window.CMDS;

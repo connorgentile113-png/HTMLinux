@@ -5,9 +5,9 @@ A full Linux terminal emulator that runs entirely in your browser — no server,
 ## Features
 
 - **Real filesystem** — persistent VFS stored in localStorage, survives page refreshes
-- **100+ commands** — `ls`, `cat`, `grep`, `sed`, `awk`, `find`, `tar`, `curl`, `wget`, and more
+- **150+ commands** — coreutils, networking, kernel/admin, package, and fun commands
 - **Nano editor** — full GNU nano clone with syntax keybindings
-- **Package manager** — `apt install` / `apt remove` for git, python, node, htop, neofetch, curl, wget
+- **Full apt emulator** — `apt`, `apt-get`, and `apt-cache` with update/install/reinstall/remove/purge/policy/mark/autoremove/clean/download/source/changelog
 - **Git** — `init`, `clone`, `add`, `commit`, `log`, `branch`, `checkout`, `stash`, `remote` — clone fetches real files from public GitHub repos
 - **Python & Node REPL** — interactive interpreters via `python` or `node`
 - **User management** — `useradd`, `userdel`, `passwd`, `su`, `sudo`, and a full TUI via `users`
