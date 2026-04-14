@@ -21,12 +21,13 @@ window.Shell = {
 
   async execCmd(cmd, args) {
     // Expand aliases
+    let actualCmd = cmd, actualArgs = args;
     if (this.aliases[cmd]) {
       const expanded = this.tokenize(this.aliases[cmd]);
-      cmd = expanded[0]; args = [...expanded.slice(1), ...args];
+      actualCmd = expanded[0]; actualArgs = [...expanded.slice(1), ...args];
     }
     // Expand variables and command substitutions
-    args = await Promise.all(args.map(async a => {
+    let expandedArgs = await Promise.all(actualArgs.map(async a => {
       // $(cmd) substitution
       let arg = a.replace(/\$\(([^)]+)\)/g, '');
       const matches = [...(arg.matchAll(/\$\(([^)]+)\)/g) || [])];
@@ -34,28 +35,28 @@ window.Shell = {
       return ENV.expand(arg);
     }));
 
-    if (CMDS[cmd]) {
-      const r = await CMDS[cmd](args, TERM);
+    if (CMDS[actualCmd]) {
+      const r = await CMDS[actualCmd](expandedArgs, TERM);
       return r ?? '';
     }
 
     // VFS script lookup
     const paths = ENV.v.PATH.split(':');
     for (const p of paths) {
-      const full = p + '/' + cmd;
+      const full = p + '/' + actualCmd;
       if (VFS.exists(full)) {
         const c = VFS.readFile(full);
-        if (c && c.startsWith('#!')) return await this.runScript(c, args);
-        return `${cmd}: permission denied or not executable`;
+        if (c && c.startsWith('#!')) return await this.runScript(c, expandedArgs);
+        return `${actualCmd}: permission denied or not executable`;
       }
     }
     // Local script
-    const local = VFS.norm(cmd, ENV.cwd);
+    const local = VFS.norm(actualCmd, ENV.cwd);
     if (VFS.exists(local)) {
       const c = VFS.readFile(local);
-      if (c && (c.startsWith('#!') || c.includes('\n'))) return await this.runScript(c, args);
+      if (c && (c.startsWith('#!') || c.includes('\n'))) return await this.runScript(c, expandedArgs);
     }
-    return `\x1b[1m${cmd}: command not found\x1b[0m`;
+    return `\x1b[1m${actualCmd}: command not found\x1b[0m`;
   },
 
   async runScript(src, scriptArgs=[]) {
