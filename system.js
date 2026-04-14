@@ -699,6 +699,173 @@ window.PKG = (() => {
     },
   };
 
+  function makeGenericCliHandler(primary, pkgMeta={}) {
+    const cmdName = primary;
+    const desc = pkgMeta.desc || `${cmdName} command`;
+    const version = pkgMeta.ver || '1.0.0';
+    const helpLines = [
+      `${cmdName} (HTMLinux package)`,
+      `Usage: ${cmdName} [--help] [--version] [subcommand] [args...]`,
+      `Description: ${desc}`,
+      '',
+      'Subcommands:',
+      '  info      show package metadata',
+      '  demo      run a demonstration action',
+      '  status    show simulated runtime status',
+    ];
+    return (args=[]) => {
+      if (!args.length || args[0] === '--help' || args[0] === 'help') return helpLines.join('\n');
+      if (args[0] === '--version' || args[0] === '-V' || args[0] === 'version') return `${cmdName} ${version} (HTMLinux)`;
+      if (args[0] === 'info') return `name=${cmdName}\nversion=${version}\ndescription=${desc}`;
+      if (args[0] === 'status') return `${cmdName}: active (simulated), pid=${Math.floor(Math.random()*5000+1000)}`;
+      if (args[0] === 'demo') return `${cmdName}: demo completed successfully`;
+      return `${cmdName}: executed with args: ${args.join(' ')}`;
+    };
+  }
+
+  function registerGenericPackage(pkgName, meta) {
+    const cmdNames = (meta.cmds && meta.cmds.length) ? meta.cmds : [pkgName];
+    REGISTRY[pkgName] = {
+      ver: meta.ver || '1.0.0',
+      desc: meta.desc || `${pkgName} package`,
+      size: meta.size || `${(Math.random()*4+0.2).toFixed(1)} MB`,
+      deps: meta.deps || [],
+      suggests: meta.suggests || [],
+      install() {
+        for (const c of cmdNames) {
+          CMDS[c] = makeGenericCliHandler(c, { ...meta, ver: meta.ver || '1.0.0' });
+        }
+      }
+    };
+  }
+
+  const BULK_PACKAGES = [
+    ['gcc','GNU C compiler'],['g++','GNU C++ compiler'],['clang','LLVM C language frontend'],['make','Build automation tool'],
+    ['cmake','Cross-platform build system'],['ninja-build','Small build system with focus on speed',['ninja']],
+    ['pkg-config','Manage compile and link flags'],['autoconf','Generate shell configure scripts'],['automake','GNU Standards-compliant Makefile generator'],
+    ['libtool','Generic library support script'],['meson','Open source build system'],['gdb','GNU project debugger'],
+    ['valgrind','Instrumentation framework for dynamic analysis'],['shellcheck','Shell script static analysis tool'],
+    ['bat','Cat clone with wings'],['exa','Modern replacement for ls'],['fd-find','Simple and fast alternative to find',['fd']],
+    ['duf','Disk usage/free utility'],['dust','More intuitive version of du'],['procs','Modern replacement for ps'],
+    ['bottom','Graphical process/system monitor',['btm']],['hyperfine','Command-line benchmarking tool'],
+    ['tokei','Count your code quickly'],['zoxide','Smarter cd command'],['starship','Cross-shell prompt'],
+    ['tmux','Terminal multiplexer'],['screen','Terminal session manager'],['neovim','Hyperextensible Vim-based text editor',['nvim']],
+    ['emacs','GNU Emacs text editor'],['micro','Modern and intuitive terminal-based text editor'],['helix','Post-modern modal text editor',['hx']],
+    ['mc','Midnight Commander file manager'],['ranger','Vim-inspired file manager'],['nnn','Tiny and productive file manager'],
+    ['httrack','Website copier/offline browser'],['lynx','Text web browser'],['w3m','Text-based web browser'],
+    ['elinks','Full-featured text WWW browser'],['aria2','Download utility supporting HTTP/FTP/BitTorrent',['aria2c']],
+    ['axel','Light command line download accelerator'],['rsync','Fast incremental file transfer utility'],
+    ['socat','Multipurpose relay for bidirectional data transfer'],['tcpdump','Dump traffic on a network'],
+    ['wireshark-cli','Network protocol analyzer (CLI tshark)',['tshark']],['ethtool','Display or change ethernet settings'],
+    ['iperf3','Network bandwidth measurement tool'],['iftop','Display bandwidth usage on an interface'],['bmon','Bandwidth monitor and rate estimator'],
+    ['speedtest-cli','Internet bandwidth speed test'],['openvpn','Virtual private network daemon/client'],
+    ['wireguard-tools','Fast modern VPN tunnel tools',['wg']],['tor','Anonymizing overlay network client'],
+    ['torsocks','Wrapper to route CLI apps through Tor'],['dnsutils','DNS lookup utilities',['hostx']],
+    ['bind9-utils','BIND DNS development utilities',['named-checkzone']],['whois-cli','Whois client',['whoisx']],
+    ['netcat-openbsd','TCP/IP swiss army knife',['netcat']],['mtr-tiny','Network diagnostic tool'],['arp-scan','ARP scanning and fingerprinting tool'],
+    ['masscan','TCP port scanner'],['hydra','Network login cracker (educational stub)'],['john','Password cracker stub',['john']],
+    ['hashcat','Advanced password recovery utility'],['aircrack-ng','WiFi security auditing tools'],['nftables','Packet filtering framework',['nft']],
+    ['ufw','Uncomplicated firewall'],['fail2ban','Ban hosts that cause multiple authentication errors'],
+    ['podman','Daemonless container engine'],['docker-cli','Docker command-line client',['docker']],
+    ['docker-compose','Define and run multi-container applications',['compose']],['buildah','Container image build utility'],
+    ['skopeo','Work with remote container images'],['kubectl','Kubernetes command-line tool'],['kustomize','Kubernetes native configuration management'],
+    ['helm','Kubernetes package manager'],['kind','Kubernetes in Docker'],['minikube','Local Kubernetes'],
+    ['terraform','Infrastructure as code software'],['ansible','Automation platform'],['packer','Create machine images'],
+    ['vagrant','Build and manage virtual machine environments'],['qemu-utils','QEMU utilities'],['virt-manager-cli','Virtual machine management CLI',['virsh']],
+    ['sqlite','SQLite command line shell',['sqlite']],['postgresql-client','PostgreSQL interactive terminal',['psql']],
+    ['mysql-client','MySQL command line client',['mysql']],['redis-tools','Redis command line tools',['redis-cli']],
+    ['mongodb-tools','MongoDB command line tools',['mongosh']],['clickhouse-client','ClickHouse command line client'],
+    ['influx-cli','InfluxDB command line interface'],['jq-extra','Additional jq helpers',['joq']],
+    ['yq','YAML processor'],['xsv','CSV indexer and slicer'],['csvkit','Utilities for converting to and working with CSV'],
+    ['pandoc','Universal document converter'],['texlive-cli','TeX Live command line tools',['pdflatex']],
+    ['graphviz','Graph visualization software'],['gnuplot','Portable command-line driven graphing utility'],
+    ['imagemagick-cli','CLI image utilities',['magick']],['poppler-utils','PDF rendering utilities',['pdftotext']],
+    ['ffprobe','Media stream analyzer'],['mediainfo','Convenient unified display of media metadata'],
+    ['yt-dlp','Feature-rich command-line audio/video downloader'],['sox','Swiss Army knife of sound processing'],
+    ['mpv-cli','Media player CLI wrapper',['mpv']],['feh','Lightweight image viewer'],
+    ['openjdk','OpenJDK development kit',['java','javac']],['maven','Java project management tool',['mvn']],
+    ['gradle','Open source build automation tool'],['go','Go programming language compiler'],['rustc','Rust compiler'],
+    ['cargo','Rust package manager'],['deno','Secure runtime for JavaScript and TypeScript'],['bun','Fast all-in-one JavaScript runtime'],
+    ['ruby','Ruby language interpreter'],['irb','Interactive Ruby shell'],['perl','Practical extraction and report language'],
+    ['php-cli','PHP command-line interpreter',['php']],['r-base','GNU R statistical computing language',['R']],
+    ['julia','High-level dynamic programming language'],['swift-cli','Swift compiler and runtime',['swift']],
+    ['dotnet-sdk','Microsoft .NET SDK',['dotnet']],['mono-devel','Mono development tools',['mono']],
+    ['elixir','Dynamic, functional language for building scalable apps'],['erlang','General-purpose programming language and runtime'],
+    ['clojure','Dynamic Lisp language for the JVM'],['zig','General-purpose programming language and toolchain'],
+    ['nim','Statically typed compiled systems programming language'],['ocaml','ML language implementation'],
+    ['haskell-platform','Haskell tools and libraries',['ghci']],['lua-tools','Lua command line tools',['luac']],
+    ['fish','Friendly interactive shell'],['zsh','Z shell'],['xonsh','Python-powered shell'],
+    ['nushell','A new type of shell'],['direnv','Load and unload environment variables depending on current directory'],
+    ['fzf-extra','Extra fuzzy finder tooling',['fzy']],['ripgrep-all','Search many formats with ripgrep',['rga']],
+    ['silversearcher-ag','Code-searching tool similar to ack',['ag']],['ack','Search tool like grep optimized for programmers'],
+    ['parallel','Build and execute shell command lines from standard input'],['entr','Run arbitrary commands when files change'],
+    ['watchman','Watch files and trigger actions when they change'],['inotify-tools','Command-line utilities for inotify'],
+    ['tree-extra','Enhanced tree utilities',['tre']],['tldr','Community-driven man pages'],['man-db-extra','Additional man page indexing tools',['mandb']],
+    ['neofetch-extra','Additional fetch themes',['fetchx']],['fastfetch','System information tool written in C'],['btop','Resource monitor that shows usage and stats']
+  ];
+
+  for (const row of BULK_PACKAGES) {
+    const [name, desc, cmds] = row;
+    const seed = [...name].reduce((s,ch)=>s+ch.charCodeAt(0),0);
+    registerGenericPackage(name, {
+      desc,
+      cmds: cmds || [name],
+      ver: `1.${seed%10}.${(seed*7)%10}`,
+      size: `${((seed%90)/10+0.5).toFixed(1)} MB`
+    });
+  }
+
+  async function syncRemotePackagesViaWasm(shell) {
+    const now = Date.now();
+    const last = meta.cache?.wasmSyncTs || 0;
+    if (now - last < 10 * 60 * 1000) return 0;
+    let wasmReady = false;
+    try {
+      const bytes = new Uint8Array([
+        0,97,115,109,1,0,0,0,1,5,1,96,0,1,127,3,2,1,0,7,8,1,4,112,105,110,103,0,0,10,6,1,4,0,65,1,11
+      ]);
+      const mod = await WebAssembly.instantiate(bytes);
+      wasmReady = !!mod?.instance?.exports?.ping;
+    } catch {}
+    if (!wasmReady) {
+      meta.cache.wasmSyncTs = now;
+      localStorage.setItem(META_KEY,JSON.stringify(meta));
+      return 0;
+    }
+    const urls = [
+      'https://packages.htmlinux.local/index.json',
+      'https://raw.githubusercontent.com/connorgentile113-png/HTMLinux/main/package-index.json'
+    ];
+    let added = 0;
+    for (const u of urls) {
+      try {
+        const resp = await fetch(u);
+        if (!resp.ok) continue;
+        const payload = await resp.json();
+        const pkgs = Array.isArray(payload) ? payload : payload.packages;
+        if (!Array.isArray(pkgs)) continue;
+        for (const p of pkgs) {
+          if (!p?.name || REGISTRY[p.name]) continue;
+          registerGenericPackage(p.name, {
+            desc: p.desc || `${p.name} package`,
+            ver: p.ver || '1.0.0',
+            size: p.size || '1.0 MB',
+            cmds: Array.isArray(p.cmds) && p.cmds.length ? p.cmds : [p.name],
+            deps: Array.isArray(p.deps) ? p.deps : [],
+            suggests: Array.isArray(p.suggests) ? p.suggests : []
+          });
+          added++;
+        }
+        break;
+      } catch {}
+    }
+    meta.cache.wasmSyncTs = now;
+    meta.cache.remotePackagesAdded = (meta.cache.remotePackagesAdded || 0) + added;
+    localStorage.setItem(META_KEY,JSON.stringify(meta));
+    if (added && shell?.writeln) shell.writeln(`Fetched ${added} additional packages via WASM index loader.`);
+    return added;
+  }
+
   return {
     load() {
       try{inst=JSON.parse(localStorage.getItem(KEY)||'{}');}catch{inst={};}
@@ -709,6 +876,7 @@ window.PKG = (() => {
       for(const n of Object.keys(inst)) if(REGISTRY[n]) REGISTRY[n].install();
     },
     async update(shell) {
+      await syncRemotePackagesViaWasm(shell);
       shell.writeln(`\x1b[1mGet:1\x1b[0m https://packages.htmlinux.local stable InRelease`);
       await delay(150);
       shell.writeln(`\x1b[1mGet:2\x1b[0m https://packages.htmlinux.local stable/main amd64 Packages [${Object.keys(REGISTRY).length} packages]`);

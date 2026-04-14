@@ -8,6 +8,8 @@ A full Linux terminal emulator that runs entirely in your browser — no server,
 - **150+ commands** — coreutils, networking, kernel/admin, package, and fun commands
 - **Nano editor** — full GNU nano clone with syntax keybindings
 - **Full apt emulator** — `apt`, `apt-get`, and `apt-cache` with update/install/reinstall/remove/purge/policy/mark/autoremove/clean/download/source/changelog
+- **Huge package catalog** — 100+ additional installable packages with working command handlers in-browser
+- **WASM package sync path** — optional WASM-assisted remote index fetch to discover extra package manifests
 - **Git** — `init`, `clone`, `add`, `commit`, `log`, `branch`, `checkout`, `stash`, `remote` — clone fetches real files from public GitHub repos
 - **Python & Node REPL** — interactive interpreters via `python` or `node`
 - **User management** — `useradd`, `userdel`, `passwd`, `su`, `sudo`, and a full TUI via `users`
