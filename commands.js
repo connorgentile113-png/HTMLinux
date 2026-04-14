@@ -17,60 +17,126 @@ window.CMDS = {
 
   // ── Listing ─────────────────────────────────────────────────────
   ls(args) {
-    let a=false,A=false,l=false,h=false,t=false,S=false,r=false,F=false,R=false,one=false,color=true;
-    const paths=[];
-    for(const x of args){
-      if(x.startsWith('-')&&!x.startsWith('--')){
-        if(x.includes('a'))a=true; if(x.includes('A'))A=true;
-        if(x.includes('l'))l=true; if(x.includes('h'))h=true;
-        if(x.includes('t'))t=true; if(x.includes('S'))S=true;
-        if(x.includes('r'))r=true; if(x.includes('F'))F=true;
-        if(x.includes('R'))R=true; if(x.includes('1'))one=true;
-        if(x.includes('n'))color=false;
-      } else paths.push(x);
-    }
-    if(!paths.length)paths=['.'];
-    const colorName=(e)=>{
-      if(!color)return e.name+(e.t==='d'?(F?'/':''):e.t==='l'?(F?'@':''):'');
-      let n=e.name;
-      const suf=e.t==='d'?(F?'/':''):e.t==='l'?(F?'@':''):'';
-      if(e.t==='d') return `\x1b[1;34m${n}${suf}\x1b[0m`;
-      if(e.t==='l') return `\x1b[1;36m${n}${suf}\x1b[0m`;
-      if(e.m&&(e.m&0o111)) return `\x1b[1;32m${n}${suf}\x1b[0m`;
-      return n+suf;
-    };
-    const doDir=(p,prefix='')=>{
-      let entries=VFS.readdir(p,ENV.cwd)||[];
-      if(!a&&!A)entries=entries.filter(e=>!e.name.startsWith('.'));
-      if(t)entries.sort((a,b)=>(b.mt||0)-(a.mt||0));
-      else if(S)entries.sort((a,b)=>VFS.size(b.path)-VFS.size(a.path));
-      else entries.sort((a,b)=>a.name.localeCompare(b.name));
-      if(r)entries.reverse();
-      if(l){
-        const total=entries.reduce((s,e)=>s+Math.ceil(VFS.size(e.path)/512),0);
-        const lines=entries.map(e=>{
-          const perm=VFS.fmtMode(e.m||0o644,e.t);
-          const sz=h?humanSize(VFS.size(e.path)).padStart(6):String(VFS.size(e.path)).padStart(9);
-          const d=new Date(e.mt||0);
-          const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
-          const dt=`${mo} ${String(d.getDate()).padStart(2)} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
-          const lnk=e.t==='l'?` -> ${e.target}`:'';
-          return `${perm} 1 ${String(e.u||1000).padEnd(8)} ${String(e.g||1000).padEnd(8)} ${sz} ${dt} ${colorName(e)}${lnk}`;
-        });
-        return (prefix?`${prefix}:\n`:'')+`total ${total}\n`+lines.join('\n');
+    let showAll = false, showAlmostAll = false, longFmt = false, humanReadable = false;
+    let sortByTime = false, sortBySize = false, reverseSort = false, appendMarks = false;
+    let recursive = false, onePerLine = false, noColor = false;
+    let listPaths = [];
+    
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+      if (arg.startsWith('-') && !arg.startsWith('--')) {
+        if (arg.includes('a')) showAll = true;
+        if (arg.includes('A')) showAlmostAll = true;
+        if (arg.includes('l')) longFmt = true;
+        if (arg.includes('h')) humanReadable = true;
+        if (arg.includes('t')) sortByTime = true;
+        if (arg.includes('S')) sortBySize = true;
+        if (arg.includes('r')) reverseSort = true;
+        if (arg.includes('F')) appendMarks = true;
+        if (arg.includes('R')) recursive = true;
+        if (arg.includes('1')) onePerLine = true;
+        if (arg.includes('n')) noColor = true;
+      } else {
+        listPaths.push(arg);
       }
-      if(one)return (prefix?`${prefix}:\n`:'')+entries.map(e=>colorName(e)).join('\n');
-      return (prefix?`${prefix}:\n`:'')+entries.map(e=>colorName(e)).join('  ');
-    };
-    const results=[];
-    for(const p of paths){
-      const node=VFS.stat(p,ENV.cwd);
-      if(!node){results.push(`ls: cannot access '${p}': No such file or directory`);continue;}
-      if(node.t==='d'){
-        results.push(doDir(p,paths.length>1?p:''));
-        if(R){const en=VFS.readdir(p,ENV.cwd)||[];for(const e of en)if(e.t==='d')results.push('\n'+doDir(e.path,e.path));}
-      } else results.push(colorName(node));
     }
+    
+    if (listPaths.length === 0) {
+      listPaths.push('.');
+    }
+    
+    function formatColor(entry, useColor) {
+      let name = entry.name;
+      let suffix = '';
+      if (appendMarks) {
+        if (entry.t === 'd') suffix = '/';
+        else if (entry.t === 'l') suffix = '@';
+      }
+      if (!useColor) return name + suffix;
+      
+      if (entry.t === 'd') return '\x1b[1;34m' + name + suffix + '\x1b[0m';
+      if (entry.t === 'l') return '\x1b[1;36m' + name + suffix + '\x1b[0m';
+      if (entry.m && (entry.m & 0o111)) return '\x1b[1;32m' + name + suffix + '\x1b[0m';
+      return name + suffix;
+    }
+    
+    function listDirectory(dirPath, prefix) {
+      let entries = VFS.readdir(dirPath, ENV.cwd) || [];
+      
+      if (!showAll && !showAlmostAll) {
+        entries = entries.filter(e => !e.name.startsWith('.'));
+      }
+      
+      if (showAlmostAll && !showAll) {
+        entries = entries.filter(e => e.name !== '.' && e.name !== '..');
+      }
+      
+      if (sortByTime) {
+        entries.sort((x, y) => (y.mt || 0) - (x.mt || 0));
+      } else if (sortBySize) {
+        entries.sort((x, y) => VFS.size(y.path) - VFS.size(x.path));
+      } else {
+        entries.sort((x, y) => x.name.localeCompare(y.name));
+      }
+      
+      if (reverseSort) {
+        entries.reverse();
+      }
+      
+      let output = '';
+      if (prefix) output += prefix + ':\n';
+      
+      if (longFmt) {
+        let total = entries.reduce((sum, e) => sum + Math.ceil(VFS.size(e.path) / 512), 0);
+        output += 'total ' + total + '\n';
+        
+        let lines = entries.map(e => {
+          let perm = VFS.fmtMode(e.m || 0o644, e.t);
+          let size = humanReadable ? humanSize(VFS.size(e.path)).padStart(6) : String(VFS.size(e.path)).padStart(9);
+          let d = new Date(e.mt || 0);
+          let mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+          let dt = mo + ' ' + String(d.getDate()).padStart(2) + ' ' + 
+                   d.getHours().toString().padStart(2, '0') + ':' + 
+                   d.getMinutes().toString().padStart(2, '0');
+          let link = (e.t === 'l') ? ' -> ' + e.target : '';
+          let colored = formatColor(e, !noColor);
+          return perm + ' 1 ' + String(e.u || 1000).padEnd(8) + ' ' + String(e.g || 1000).padEnd(8) + 
+                 ' ' + size + ' ' + dt + ' ' + colored + link;
+        });
+        output += lines.join('\n');
+      } else if (onePerLine) {
+        output += entries.map(e => formatColor(e, !noColor)).join('\n');
+      } else {
+        output += entries.map(e => formatColor(e, !noColor)).join('  ');
+      }
+      
+      return output;
+    }
+    
+    let results = [];
+    for (let i = 0; i < listPaths.length; i++) {
+      let p = listPaths[i];
+      let node = VFS.stat(p, ENV.cwd);
+      if (!node) {
+        results.push('ls: cannot access \'' + p + '\': No such file or directory');
+        continue;
+      }
+      
+      if (node.t === 'd') {
+        results.push(listDirectory(p, listPaths.length > 1 ? p : ''));
+        if (recursive) {
+          let dirEntries = VFS.readdir(p, ENV.cwd) || [];
+          for (let j = 0; j < dirEntries.length; j++) {
+            if (dirEntries[j].t === 'd') {
+              results.push('\n' + listDirectory(dirEntries[j].path, dirEntries[j].path));
+            }
+          }
+        }
+      } else {
+        results.push(formatColor(node, !noColor));
+      }
+    }
+    
     return results.join('\n');
   },
 
